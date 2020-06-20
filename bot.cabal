@@ -1,0 +1,121 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.34.1.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 8e36765d401bcab1e624458b4860c2592811753180a4fb79d89992fc6d47e878
+
+name:           bot
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/githubuser/bot#readme>
+homepage:       https://github.com/wixe/hbot#readme
+bug-reports:    https://github.com/wixe/hbot/issues
+author:         Wixe
+maintainer:     wixe@ya.ru
+copyright:      2020 Me
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/wixe/hbot
+
+library
+  exposed-modules:
+      Bot
+      EchoBot
+      Lib
+      Logger
+      LoggerImpl
+      Misc
+      Options
+      Result
+      SerDe
+      Session
+      Telegram
+      Telegram.Chat
+      Telegram.Message
+      Telegram.Result
+      Telegram.Update
+      Telegram.User
+      Test
+      Vk
+  other-modules:
+      Paths_bot
+  hs-source-dirs:
+      src
+  build-depends:
+      aeson ==1.4.*
+    , async ==2.2.*
+    , base >=4.7 && <5
+    , bytestring ==0.10.*
+    , free ==5.1.*
+    , hashable ==1.3.*
+    , http-client ==0.6.4.*
+    , mtl ==2.2.*
+    , parsec ==3.1.*
+    , req ==3.1.*
+    , stm ==2.5.*
+    , text ==1.2.*
+    , time ==1.*
+    , unordered-containers ==0.2.*
+    , yaml ==0.11.*
+  default-language: Haskell2010
+
+executable bot-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_bot
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson ==1.4.*
+    , async ==2.2.*
+    , base >=4.7 && <5
+    , bot
+    , bytestring ==0.10.*
+    , free ==5.1.*
+    , hashable ==1.3.*
+    , http-client ==0.6.4.*
+    , mtl ==2.2.*
+    , parsec ==3.1.*
+    , req ==3.1.*
+    , stm ==2.5.*
+    , text ==1.2.*
+    , time ==1.*
+    , unordered-containers ==0.2.*
+    , yaml ==0.11.*
+  default-language: Haskell2010
+
+test-suite bot-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_bot
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson ==1.4.*
+    , async ==2.2.*
+    , base >=4.7 && <5
+    , bot
+    , bytestring ==0.10.*
+    , free ==5.1.*
+    , hashable ==1.3.*
+    , http-client ==0.6.4.*
+    , mtl ==2.2.*
+    , parsec ==3.1.*
+    , req ==3.1.*
+    , stm ==2.5.*
+    , text ==1.2.*
+    , time ==1.*
+    , unordered-containers ==0.2.*
+    , yaml ==0.11.*
+  default-language: Haskell2010

@@ -1,0 +1,26 @@
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+
+module Vk.Result
+    ( parseResult
+    ) where
+
+import Data.Aeson
+import Data.Aeson.Types
+import GHC.Generics
+
+import SerDe
+import Result
+
+parseResult :: (FromJSON a) => Value -> Result.Result a
+parseResult = eitherToRes . parseEither parser
+    where parser = withObject "" $ \obj -> do
+             res <- obj .:?  "response"
+             case res of
+               Just x -> return x
+               Nothing -> do
+                   err <- obj .: "error"
+                   code <- err .: "error_code"
+                   msg <- err .: "error_msg"
+                   fail $ "Vk request failed with code " code ++ ": " ++ msg
+          parser :: (FromJSON a) => Value -> Parser a
