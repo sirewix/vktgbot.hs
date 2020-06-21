@@ -8,6 +8,9 @@
 , OverloadedStrings
 , AllowAmbiguousTypes
 , ScopedTypeVariables
+, TypeApplications
+, PartialTypeSignatures
+, KindSignatures
 #-}
 -- , FunctionalDependencies
 module Test where
@@ -120,10 +123,11 @@ kindamain :: IO ()
 kindamain = do
     opts <- getOptions
     env <- makeEnv opts :: IO (Env Int)
-    let prog = proga :: (Logger (Env Int) HLogger) => App (Env Int) ()
+    --let prog = proga :: (Logger (Env Int) HLogger) => App (Env Int) ()
+    let prog = proga @(Env Int) @HLogger -- :: (Logger (Env Int) HLogger) => App (Env Int) ()
     runApp prog (env)
 
-proga :: forall s m. (Logger (Env s) HLogger) => App (Env s) ()
+proga :: forall e m. (Logger e m) => App e ()
 proga = do
+    logg @_ @m Error "msg"
     logg Error "msg"
-
