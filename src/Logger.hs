@@ -1,14 +1,14 @@
 module Logger
-  ( Handle(..)
-  , Priority(..)
-  , logDebug
-  , logInfo
-  , logWarning
-  , logError
+  ( Priority(..)
+  , Logger
   , sublog
+  , newLogger
   ) where
 
-import Data.Text
+import Control.Concurrent.MVar(newMVar,withMVar)
+import Data.Text(Text,pack)
+import Data.Text.IO(hPutStrLn)
+import qualified System.IO as System.IO
 
 data Priority
     = Debug
@@ -17,18 +17,16 @@ data Priority
     | Error
     deriving (Eq, Ord, Show, Read)
 
-newtype Handle = Handle
-    { getLog :: Priority -> Text -> IO () }
+type Logger = Priority -> Text -> IO ()
 
-logDebug, logInfo, logWarning, logError :: Handle -> Text -> IO ()
-logDebug   = (`getLog` Debug)
-logInfo    = (`getLog` Info)
-logWarning = (`getLog` Warning)
-logError   = (`getLog` Error)
+sublog :: Text -> Logger -> Logger
+sublog prefix logger = \prio msg -> logger prio (prefix <> msg)
 
-sublog :: Text -> Handle -> Handle
-sublog prefix logger = Handle
-    { getLog = \prio msg ->
-        getLog logger prio (prefix <> msg)
-    }
-
+newLogger :: System.IO.Handle -> Priority -> IO Logger
+newLogger fileH logPrio = do
+    h <- newMVar fileH
+    return $ \prio msg ->
+        if prio >= logPrio then
+            withMVar h $ \h ->
+                hPutStrLn h $ (pack $ '[' : show prio ++ "] ")  <>  msg
+        else return ()

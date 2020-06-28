@@ -2,45 +2,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module EchoBot
-  ( entry
+  ( echoBot
+  , defState
+  , EchoBotState
   ) where
 
-import System.IO(stdout)
 import Bot
 import Control.Applicative
 import Data.Char
 import Data.Text(pack,unpack)
 import Options
 import Misc
-import qualified LoggerImpl
-import qualified Logger
-import qualified Session
-import qualified Telegram
-import qualified Vk
-
-entry options = do
-    let prio = logLevel options
-    logger <- LoggerImpl.newHandle stdout prio
-
-    {-
-    tgStorage <- newStorage -- :: Storage (Int, Int) EchoBotState
-    runBot
-        Telegram.withHandle
-        (Logger.sublog "Telegram: " logger)
-        options
-        (echoBot options)
-        tgStorage
-        (defState options)
-    -}
-
-    vkStorage <- newStorage -- :: Storage (Int, Int) EchoBotState
-    runBot
-        Vk.withHandle
-        (Logger.sublog "Vk: " logger)
-        options
-        (echoBot options)
-        vkStorage
-        (defState options)
 
 newtype EchoBotState = EchoBotState
     { nrepeat :: Int }

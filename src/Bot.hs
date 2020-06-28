@@ -1,11 +1,15 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE
+  AllowAmbiguousTypes
+, BlockArguments
+, ExistentialQuantification
+, MultiParamTypeClasses
+, OverloadedStrings
+, RankNTypes
+#-}
+
 
 module Bot
-  ( Handle(..)
+  ( Bot(..)
   , BotIO(..)
   , BotState(..)
   , BotUserInteraction(..)
@@ -27,11 +31,13 @@ import Control.Monad.Free
 import Data.Hashable
 import Data.List
 import Data.Text(Text,pack,unpack)
+import Data.Traversable
+import Logger
 import Options
-import qualified Logger    as Logger
-import qualified Session   as Session
+import Network.HTTP.Client(Manager)
+import qualified Storage
 
-data Handle sesid = Handle
+data Bot sesid = Bot
     { apiSendMessage :: !(sesid -> Message -> Maybe [Button] -> IO ())
     , apiGetMessages :: !(IO [(sesid, Message)])
     }
@@ -44,15 +50,10 @@ data BotState a = BotState
     , action :: BotIO a ()
     }
 
-defBotState
-    :: BotIO state ()
-    -> state
-    -> IO (BotState state)
-defBotState program def_substate = do
-        return $ BotState
-            { content = def_substate
-            , action = program
-            }
+defBotState program def_substate = BotState
+    { content = def_substate
+    , action = program
+    }
 
 data BotUserInteraction a next =
     ReadMessage (Message -> next)
@@ -76,9 +77,6 @@ modifyState f = Free (ModifyState f (Pure ()))
 readState :: BotIO s s
 readState = Free (ReadState (\state -> Pure state))
 
---rawIO :: IO a -> BotIO s a
---rawIO io = Free (IOAction io)
-
 instance Functor (BotUserInteraction a) where
     fmap f (ReadMessage g) = ReadMessage (f . g)
     fmap f (SendMessage str btns next) = SendMessage str btns (f next)
@@ -87,51 +85,47 @@ instance Functor (BotUserInteraction a) where
     -- fmap f (IOAction io) = IOAction (f <$> io)
 
 type BotIO a = Free (BotUserInteraction a )
-type Storage sesid a = Session.Storage sesid (BotState a)
+type Storage sesid a = Storage.Storage sesid (BotState a)
 
 newStorage :: (Eq sesid, Hashable sesid) => IO (Storage sesid a)
-newStorage = Session.newSession
--- newStorage = Session.newSession :: IO (Session.Storage sesid (BotState a))
+newStorage = Storage.newStorage
+-- newStorage = Storage.newStorage :: IO (Storage.Storage sesid (BotState a))
 
 interpret
-    :: Handle k
-    -> Logger.Handle
+    :: Bot k
+    -> Logger
     -> k
     -> BotIO a ()
     -> BotState a
     -> Maybe Message
     -> IO (BotState a)
-interpret bot logger sesid program state msg = do
-    case action state of
-      Free (ReadMessage f) -> do
-          case msg of
-            Just msg -> do
-                Logger.logDebug logger "ReadMessage"
-                interpret bot logger sesid program (state { action = f msg }) Nothing
-            Nothing -> return state
-      Free (SendMessage m btns n) -> do
-          Logger.logDebug logger "SendMessage"
-          apiSendMessage bot sesid m btns
-          let s = state { action = n }
-          interpret bot logger sesid program s msg
-      Free (ModifyState f n) -> do
-          Logger.logDebug logger "ModifyState"
-          let newState = f (content state)
-          let s = BotState { content = newState, action = n }
-          interpret bot logger sesid program s msg
-      Free (ReadState f) -> do
-          Logger.logDebug logger "ReadState"
-          let s = state { action = f (content state) }
-          interpret bot logger sesid program s msg
-      {- Free (IOAction n) -> do
-          Logger.logDebug logger "IOAction"
-          next <- n
-          let s = state { action = next }
-          interpret bot logger sesid program s msg -}
-      Pure _ -> do
-          Logger.logDebug logger "Pure"
-          let s = state { action = program }
-          interpret bot logger sesid program s msg
+interpret bot log sesid program = interpret'
+    where interpret' state msg =
+            case action state of
+              Free (ReadMessage f) -> do
+                  case msg of
+                    Just msg -> do
+                        log Debug "ReadMessage"
+                        interpret' (state { action = f msg }) Nothing
+                    Nothing -> return state
+              Free (SendMessage m btns n) -> do
+                  log Debug "SendMessage"
+                  apiSendMessage bot sesid m btns
+                  let s = state { action = n }
+                  interpret' s msg
+              Free (ModifyState f n) -> do
+                  log Debug "ModifyState"
+                  let newState = f (content state)
+                      s = BotState { content = newState, action = n }
+                  interpret' s msg
+              Free (ReadState f) -> do
+                  log Debug "ReadState"
+                  let s = state { action = f (content state) }
+                  interpret' s msg
+              Pure _ -> do
+                  log Debug "Pure"
+                  let s = state { action = program }
+                  interpret' s msg
 
 groupMsgs
     :: (Eq sesid)
@@ -143,46 +137,33 @@ groupMsgs [] = []
 
 runBot
     :: (Show k, Eq k, Hashable k)
-    => (Logger.Handle -> BotOptions -> (Handle k -> IO ()) -> IO ())
-    -> Logger.Handle
+    => (Logger -> BotOptions -> Manager -> (Bot k -> IO ()) -> IO ())
+    -> Logger
     -> BotOptions
+    -> Manager
     -> BotIO s ()
     -> Storage k s
     -> s
     -> IO ()
-runBot withHandle logger options program db defState = do
-    --bot <- newHandle options db
-    withHandle logger options $ \bot -> do
-        Logger.logInfo logger "starting bot"
+runBot withHandle log options mgr program db defState = do
+    withHandle log options mgr $ \bot -> do
+        log Info "starting bot"
         void $ forever $ do
             threadDelay 3000000
-            updateThread bot db program defState logger
-
-updateThread
-    :: (Eq sesid, Hashable sesid)
-    => Handle sesid
-    -> Bot.Storage sesid state
-    -> BotIO state ()
-    -> state
-    -> Logger.Handle
-    -> IO ()
-updateThread bot db program defState logger = do
-    -- Logger.logDebug logger "recieving updates"
-    msgs <- apiGetMessages bot
-    let len = length msgs
-    Logger.logInfo logger $ if len > 0 then
-                                ("got " <> (pack . show . length $ msgs)
-                                    <> " new message" <> (if len == 1 then "" else "s"))
-                             else
-                                ("no new messages")
-    let grouped = groupMsgs msgs
-    sequence $ map (void . forkIO . g) grouped
-    return ()
-  where g (someid, msgs) =
-          Session.updateSession (defBotState program defState) db someid $ \state -> do
-              foldl (f someid) (pure state) msgs -- :: state
-        f someid state msg = do
-            Logger.logDebug logger ("processing message \"" <> msg <> "\"")
-            state <- state
-            interpret bot logger someid program state (Just msg)
-
+            log Debug "recieving updates"
+            msgs <- apiGetMessages bot
+            let len = length msgs
+            log Info $ if len > 0 then
+                                      ("got " <> (pack . show $ len)
+                                          <> " new message" <> (if len == 1 then "" else "s"))
+                                  else
+                                      ("no new messages")
+            for (groupMsgs msgs) $ void . forkIO . \(someid, msgs) ->
+                Storage.updateStorage (defBotState program defState) db someid $ \state -> foldl
+                        (\state msg -> do
+                            log Debug ("processing message \"" <> msg <> "\"")
+                            state <- state
+                            interpret bot log someid program state (Just msg))
+                        (pure state)
+                        msgs
+            return ()

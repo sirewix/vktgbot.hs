@@ -20,7 +20,6 @@ import Data.List(find)
 import Data.Maybe
 import Data.Text(Text,pack,unpack)
 import Data.Typeable
-import Data.Yaml(FromJSON(..),(.:))
 import GHC.Generics
 import Misc
 import System.Environment
@@ -37,7 +36,7 @@ import Result
 
 data BotOptions = BotOptions
     { tgToken     :: Maybe String
-    , tgProxy     :: Maybe HttpClient.Proxy
+    , botProxy     :: Maybe HttpClient.Proxy
     , repeatTimes :: Int
     , helpText    :: Text
     , logLevel    :: Logger.Priority
@@ -63,10 +62,10 @@ getOptions = do -- IO
 resolveOptions :: [Opt] -> Result BotOptions
 resolveOptions opts = do
     _tgProxy <- maybe (Ok Nothing) (fmap Just <$> toProxy . pack)
-                                             (option "tgProxy")
+                                             (option "botProxy")
     return $ BotOptions
         { tgToken =                           option "tgToken"
-        , tgProxy = _tgProxy
+        , botProxy = _tgProxy
         , repeatTimes = maybe 5 id           (option "repeatTimes" >>= readT)
         , helpText = maybe defaultHelp pack  (option "helpText")
         , logLevel = maybe Logger.Warning id (option "logLevel" >>= readT)
@@ -131,7 +130,7 @@ fromConfig filename = catMaybes <$> to_io <$> parseFromFile config filename
         definition = do
             spaces
             key <- many1 $ alphaNum <|> char '_'
-            True <- pure $ key `elem` optionsList
+            -- True <- pure $ key `elem` optionsList
             spaces
             char '='
             spaces

@@ -13,12 +13,12 @@ import GHC.Generics
 import Result
 
 parseTgResult :: (FromJSON a) => Value -> Result.Result a
-parseTgResult = eitherToRes . parseEither parser
+parseTgResult v = eitherToRes =<< (eitherToRes . parseEither parser $ v)
     where parser = withObject "" $ \obj -> do
              ok <- obj .:  "ok"
-             if ok then
-                   (obj .:  "result")
+             if ok then do
+                   res <- obj .: "result"
+                   return . Right $ res
              else do
                    err <- obj .: "description"
-                   fail $ "Telegram request failed with: " ++ err
-          parser :: (FromJSON a) => Value -> Parser a
+                   return . Left $ "request failed with " <> err

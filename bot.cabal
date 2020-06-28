@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8e36765d401bcab1e624458b4860c2592811753180a4fb79d89992fc6d47e878
+-- hash: 6fe88ea8b37c2ae55b12e956b3a605d682118538cf1479aef5f0aa7066bdc54d
 
 name:           bot
 version:        0.1.0.0
@@ -27,23 +27,22 @@ source-repository head
 
 library
   exposed-modules:
+      App
       Bot
       EchoBot
       Lib
       Logger
-      LoggerImpl
       Misc
       Options
       Result
       SerDe
-      Session
+      Storage
       Telegram
       Telegram.Chat
       Telegram.Message
       Telegram.Result
       Telegram.Update
       Telegram.User
-      Test
       Vk
   other-modules:
       Paths_bot
@@ -57,14 +56,15 @@ library
     , free ==5.1.*
     , hashable ==1.3.*
     , http-client ==0.6.4.*
+    , http-client-tls ==0.3.5.*
+    , http-types ==0.12.*
     , mtl ==2.2.*
     , parsec ==3.1.*
     , req ==3.1.*
-    , stm ==2.5.*
     , text ==1.2.*
     , time ==1.*
     , unordered-containers ==0.2.*
-    , yaml ==0.11.*
+    , uri-encode ==1.5.*
   default-language: Haskell2010
 
 executable bot-exe
@@ -83,14 +83,15 @@ executable bot-exe
     , free ==5.1.*
     , hashable ==1.3.*
     , http-client ==0.6.4.*
+    , http-client-tls ==0.3.5.*
+    , http-types ==0.12.*
     , mtl ==2.2.*
     , parsec ==3.1.*
     , req ==3.1.*
-    , stm ==2.5.*
     , text ==1.2.*
     , time ==1.*
     , unordered-containers ==0.2.*
-    , yaml ==0.11.*
+    , uri-encode ==1.5.*
   default-language: Haskell2010
 
 test-suite bot-test
@@ -110,12 +111,13 @@ test-suite bot-test
     , free ==5.1.*
     , hashable ==1.3.*
     , http-client ==0.6.4.*
+    , http-client-tls ==0.3.5.*
+    , http-types ==0.12.*
     , mtl ==2.2.*
     , parsec ==3.1.*
     , req ==3.1.*
-    , stm ==2.5.*
     , text ==1.2.*
     , time ==1.*
     , unordered-containers ==0.2.*
-    , yaml ==0.11.*
+    , uri-encode ==1.5.*
   default-language: Haskell2010
