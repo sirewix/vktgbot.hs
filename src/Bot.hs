@@ -137,16 +137,15 @@ groupMsgs [] = []
 
 runBot
     :: (Show k, Eq k, Hashable k)
-    => (Logger -> BotOptions -> Manager -> (Bot k -> IO ()) -> IO ())
+    => (Logger -> Manager -> (Bot k -> IO ()) -> IO ())
     -> Logger
-    -> BotOptions
     -> Manager
     -> BotIO s ()
     -> Storage k s
     -> s
     -> IO ()
-runBot withHandle log options mgr program db defState = do
-    withHandle log options mgr $ \bot -> do
+runBot withHandle log mgr program db defState = do
+    withHandle log mgr $ \bot -> do
         log Info "starting bot"
         void . forever $ do
             threadDelay 3000000

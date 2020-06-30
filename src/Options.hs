@@ -35,7 +35,7 @@ import qualified Network.HTTP.Client   as HttpClient
 import Result
 
 data BotOptions = BotOptions
-    { tgToken     :: Maybe String
+    { tgToken     :: Maybe Text
     , botProxy     :: Maybe HttpClient.Proxy
     , repeatTimes :: Int
     , helpText    :: Text
@@ -64,7 +64,7 @@ resolveOptions opts = do
     _tgProxy <- maybe (Ok Nothing) (fmap Just <$> toProxy . pack)
                                              (option "botProxy")
     return $ BotOptions
-        { tgToken =                           option "tgToken"
+        { tgToken =                  pack <$> option "tgToken"
         , botProxy = _tgProxy
         , repeatTimes = maybe 5 id           (option "repeatTimes" >>= readT)
         , helpText = maybe defaultHelp pack  (option "helpText")

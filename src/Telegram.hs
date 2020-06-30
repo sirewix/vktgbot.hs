@@ -17,7 +17,6 @@ import Data.Maybe
 import Data.Text(Text,pack,unpack)
 import Data.Text.Internal.Builder
 import Data.Text.Lazy(toStrict)
-import Data.Typeable
 import Logger
 import Misc
 import Network.HTTP.Client
@@ -39,8 +38,8 @@ import qualified Telegram.Result         as Result
 import qualified Telegram.Update         as Update
 import qualified Telegram.User           as User
 
-withHandle :: Logger -> BotOptions -> Manager -> (Bot.Bot (Int, Int) -> IO ()) -> IO ()
-withHandle log options mgr f = do
+withHandle :: Text -> Logger -> Manager -> (Bot.Bot (Int, Int) -> IO ()) -> IO ()
+withHandle token log mgr f = do
     let file = "/tmp/tgbotupd"
     contents <- readFile file `catch`
         \e -> const (return "") (e :: IOException)
@@ -52,12 +51,11 @@ withHandle log options mgr f = do
         , Bot.apiGetMessages = getMessages tgpre upd_offset file
         }
   where tgpre :: (A.FromJSON c) => Text -> A.Value -> IO c
-        tgpre = runTg log mgr token (botProxy options)
-        token = maybe (error "No tgToken found") id (tgToken options)
+        tgpre = runTg log mgr token
 
 -- runTg :: (A.FromJSON a) => Logger -> Manager -> String -> p -> Text -> A.Value -> IO a
-runTg log mgr token proxy method body = do
-    request <- parseRequest $ "https://api.telegram.org/bot" <> token <> "/" <> unpack method
+runTg log mgr token method body = do
+    request <- parseRequest . unpack $ "https://api.telegram.org/bot" <> token <> "/" <> method
     let req = request
             { method = "POST"
             , requestBody = RequestBodyLBS $ A.encode body

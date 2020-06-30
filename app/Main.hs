@@ -7,6 +7,7 @@ import EchoBot
 import Logger
 import Network.HTTP.Client
 import Network.HTTP.Client.TLS
+import Control.Concurrent.Async
 import Options
 import Result
 import Storage
@@ -27,8 +28,19 @@ main = do
         program = echoBot options
     manager <- newManager settings
 
-    tgStorage <- Bot.newStorage
-    runBot Telegram.withHandle (sublog "Telegram: " log) options manager program tgStorage defState'
+    let vk = case tgToken options of
+              Just token -> do
+                tgStorage <- Bot.newStorage
+                runBot (Telegram.withHandle token) (sublog "Telegram: " log) manager program tgStorage defState'
+              Nothing ->
+                log Info "Telegram token was not found, skipping"
 
-    vkStorage <- Bot.newStorage
-    runBot Vk.withHandle       (sublog "Vk: " log)       options manager program vkStorage defState'
+    let tg = case (vkToken options, vkGroupId options) of
+              (Just token, Just group_id) -> do
+                vkStorage <- Bot.newStorage
+                runBot (Vk.withHandle token group_id)    (sublog "Vk: " log) manager program vkStorage defState'
+              (_, _) ->
+                log Info "Vkontakte group id or token was not found, skipping"
+
+    concurrently vk tg
+    return ()

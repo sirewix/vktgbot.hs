@@ -44,7 +44,7 @@ getLongPollServer log vkpre group_id = do
         return (key, server, ts)
 
 --withHandle :: Logger -> BotOptions -> Manager -> (Bot.Bot (Int, Int) -> IO ()) -> IO ()
-withHandle log options mgr f = do
+withHandle token group_id log mgr f = do
     stuff@(key, server, ts) <- getServer
     stuff <- newMVar stuff
     log Info $ "recieved a server and a key | " <> server
@@ -55,11 +55,8 @@ withHandle log options mgr f = do
         { Bot.apiSendMessage = sendMessage vkpre log group_id
         , Bot.apiGetMessages = getMessages vkpoll log stuff getServer
         }
-  where vkreq = runVk log mgr token proxy
+  where vkreq = runVk log mgr token
         vkpre = vkreq "https://api.vk.com/method/" parseResult
-        proxy = botProxy options
-        token = maybe (error "No vkToken found") id (vkToken options)
-        group_id = maybe (error "No vkGroupId found") id (vkGroupId options)
         --getServer :: IO (String, String, Int)
         getServer = do
             (key, server, tss) <- getLongPollServer log vkpre group_id
@@ -79,7 +76,7 @@ query pairs = "?" <> intercalate "&" (map f pairs)
 (=:) :: a -> b -> (a, b)
 a =: b = (a, b)
 
-runVk log mgr token proxy server parse method params = do
+runVk log mgr token server parse method params = do
     let params' =
             [ "access_token"  =: token
             , "v" =: "5.110" ]
