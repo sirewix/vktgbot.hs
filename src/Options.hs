@@ -40,8 +40,8 @@ data BotOptions = BotOptions
     , repeatTimes :: Int
     , helpText    :: Text
     , logLevel    :: Logger.Priority
-    , vkToken     :: Maybe String
-    , vkGroupId   :: Maybe Int
+    , vkToken     :: Maybe Text
+    , vkGroupId   :: Maybe Text
     } deriving(Data, Typeable, Show, Generic)
 
 deriving instance Data Logger.Priority
@@ -69,8 +69,8 @@ resolveOptions opts = do
         , repeatTimes = maybe 5 id           (option "repeatTimes" >>= readT)
         , helpText = maybe defaultHelp pack  (option "helpText")
         , logLevel = maybe Logger.Warning id (option "logLevel" >>= readT)
-        , vkToken =                           option "vkToken"
-        , vkGroupId =                        (option "vkGroupId" >>= readT)
+        , vkToken =                  pack <$> option "vkToken"
+        , vkGroupId =                pack <$> option "vkGroupId"
         }
     where required (Just opt) _ = return opt
           required Nothing msg = fail msg

@@ -13,9 +13,10 @@ import Control.Exception
 import Control.Monad.IO.Class
 import Data.Aeson((.:),(.:?),(.=))
 import Data.Int
-import Data.List
+import Data.Functor
+-- import Data.List
 import Data.Maybe
-import Data.Text(Text,pack,unpack,null)
+import Data.Text(Text,pack,unpack,null,intercalate)
 import Data.Text.Lazy(toStrict)
 import GHC.Generics
 import Logger
@@ -35,10 +36,10 @@ import qualified Network.URI.Encode      as U
 import qualified Vk.Message              as Message
 
 getLongPollServer log vkpre group_id = do
-    longpoll <- vkpre "groups.getLongPollServer" [("group_id" :: String) =: group_id]
+    longpoll <- vkpre "groups.getLongPollServer" ["group_id" =: group_id]
     resToIO . eitherToRes . (`A.parseEither` longpoll) . A.withObject "" $ \obj -> do
-        key    <- obj .: "key"    :: A.Parser String -- (string) — ключ;
-        server <- obj .: "server" :: A.Parser String -- (string) — url сервера;
+        key    <- obj .: "key"    :: A.Parser Text -- (string) — ключ;
+        server <- obj .: "server" :: A.Parser Text -- (string) — url сервера;
         ts     <- obj .: "ts"     :: A.Parser String -- (string) — timestamp.
         return (key, server, ts)
 
@@ -46,7 +47,7 @@ getLongPollServer log vkpre group_id = do
 withHandle log options mgr f = do
     stuff@(key, server, ts) <- getServer
     stuff <- newMVar stuff
-    log Info $ "recieved a server and a key | " <> pack server
+    log Info $ "recieved a server and a key | " <> server
     let vkpoll serv = vkreq serv parseUpdate ""
     {- apiSendMessage :: !(sesid -> Message -> Maybe [Button] -> IO ())
     ,  apiGetMessages :: !(IO [(sesid, Message)]) -}
@@ -54,12 +55,11 @@ withHandle log options mgr f = do
         { Bot.apiSendMessage = sendMessage vkpre log group_id
         , Bot.apiGetMessages = getMessages vkpoll log stuff getServer
         }
-  where --vkpre :: (A.FromJSON c) => Text -> hz -> IO c
-        vkreq = runVk log mgr token proxy
+  where vkreq = runVk log mgr token proxy
         vkpre = vkreq "https://api.vk.com/method/" parseResult
         proxy = botProxy options
         token = maybe (error "No vkToken found") id (vkToken options)
-        group_id = maybe (error "No vkGroupId found") show (vkGroupId options)
+        group_id = maybe (error "No vkGroupId found") id (vkGroupId options)
         --getServer :: IO (String, String, Int)
         getServer = do
             (key, server, tss) <- getLongPollServer log vkpre group_id
@@ -72,9 +72,9 @@ withHandle log options mgr f = do
             -}
             return (key, server, ts)
 
-query :: [(String, String)] -> String
+query :: [(Text, Text)] -> Text
 query pairs = "?" <> intercalate "&" (map f pairs)
-    where f (k, v) = k <> "=" <> U.encode v
+    where f (k, v) = k <> "=" <> U.encodeText v
 
 (=:) :: a -> b -> (a, b)
 a =: b = (a, b)
@@ -82,10 +82,9 @@ a =: b = (a, b)
 runVk log mgr token proxy server parse method params = do
     let params' =
             [ "access_token"  =: token
-            , ("v" :: String) =: "5.110" ]
-    request <- parseRequest $ server <> unpack method
-                                     <> query (params' <> params)
-
+            , "v" =: "5.110" ]
+    request <- parseRequest . unpack $ server <> method
+                                              <> query (params' <> params)
     log Debug $ "sending " <> (pack $ show params)
     let req = request
     res <- httpLbs req mgr
@@ -136,7 +135,7 @@ getMessages vkpoll log stuff getServer = modifyMVar stuff getMessages'
             updates <- vkpoll server
                 [ "act" =: "a_check"
                 , "key" =: key
-                , "ts"  =: show ts
+                , "ts"  =: (pack $ show ts)
              -- , "wait" =: "25"
                 ]
             case updates of
@@ -155,11 +154,25 @@ getMessages vkpoll log stuff getServer = modifyMVar stuff getMessages'
 
 sendMessage vkpre log group_id peer_id text btns = do
     r <- randomIO :: IO Int64
-    let query =
-          [ ("group_id" :: String) =: group_id
-          , "peer_id" =: (show peer_id)
-          , "message" =: unpack text
-          , "random_id" =: (show r)
-          ]
+    let query = mbkeyboard
+          [ "group_id" =: group_id
+          , "peer_id" =: (pack $ show peer_id)
+          , "message" =: text
+          , "random_id" =: (pack $ show r) ]
     vkpre "messages.send" query
     return ()
+  where
+      mbkeyboard = consMay "keyboard" (toStrict . LE.decodeUtf8 <$> A.encode <$> keyboard)
+      consMay attr = maybe id ((:) . (attr =:))
+      keyboard = btns <&> \btns -> A.object
+          [ "one_time" .= True
+          , "inline" .= False
+          , "buttons" .= [map button btns]
+          ]
+
+button :: Bot.Button -> A.Value
+button b = A.object
+    [ "action" .= A.object
+        [ "type" .= ("text" :: Text)
+        , "label" .= b ]
+    , "color" .= ("secondary" :: Text) ]

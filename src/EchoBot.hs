@@ -48,7 +48,9 @@ help opts _ = sendMessage (helpText opts)
 repeatCmd :: BotOptions -> String -> BotIO EchoBotState ()
 repeatCmd _ _ = do
     -- sendMessage "How many times do you want your message repeated?"
-    sendWithKeyboard  "How many times do you want your message repeated?" (map (pack . show) [1..5])
+    state <- readState
+    sendWithKeyboard ("How many times do you want your message repeated? Now it is "
+                    <> (pack . show $ nrepeat state)) (map (pack . show) [1..5])
     msg <- readMessage
     case readT (unpack msg) of
       Just n -> do
