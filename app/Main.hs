@@ -27,10 +27,8 @@ main = do
         program = echoBot options
     manager <- newManager settings
 
-    {-
     tgStorage <- Bot.newStorage -- :: Storage (Int, Int) EchoBotState
     runBot Telegram.withHandle (sublog "Telegram: " log) options manager program tgStorage defState'
-    -}
 
-    vkStorage <- Bot.newStorage -- :: Storage (Int, Int) EchoBotState
+    vkStorage <- Bot.newStorage -- :: IO (Bot.Storage Int EchoBotState)
     runBot Vk.withHandle       (sublog "Vk: " log)       options manager program vkStorage defState'

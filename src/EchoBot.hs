@@ -62,6 +62,7 @@ matchCmd (first:msg)
   | (first == '/') && (not $ null cmd) = Just (cmd, (dropWhile (==' ') rest))
   | otherwise = Nothing
   where (cmd, rest) = break (not . isAlphaNum) msg
+matchCmd [] = Nothing
 
 {-
 doubleEchoBot :: BotIO EchoBotState ()

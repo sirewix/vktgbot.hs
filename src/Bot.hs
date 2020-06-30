@@ -148,22 +148,23 @@ runBot
 runBot withHandle log options mgr program db defState = do
     withHandle log options mgr $ \bot -> do
         log Info "starting bot"
-        void $ forever $ do
+        void . forever $ do
             threadDelay 3000000
-            log Debug "recieving updates"
-            msgs <- apiGetMessages bot
-            let len = length msgs
-            log Info $ if len > 0 then
-                                      ("got " <> (pack . show $ len)
-                                          <> " new message" <> (if len == 1 then "" else "s"))
-                                  else
-                                      ("no new messages")
-            for (groupMsgs msgs) $ void . forkIO . \(someid, msgs) ->
-                Storage.updateStorage (defBotState program defState) db someid $ \state -> foldl
-                        (\state msg -> do
-                            log Debug ("processing message \"" <> msg <> "\"")
-                            state <- state
-                            interpret bot log someid program state (Just msg))
-                        (pure state)
-                        msgs
-            return ()
+            forkIO $ do
+                log Debug "recieving updates"
+                msgs <- apiGetMessages bot
+                let len = length msgs
+                log Info $ if len > 0 then
+                                          ("got " <> (pack . show $ len)
+                                              <> " new message" <> (if len == 1 then "" else "s"))
+                                      else
+                                          ("no new messages")
+                for (groupMsgs msgs) $ void . forkIO . \(someid, msgs) ->
+                    Storage.updateStorage (defBotState program defState) db someid $ \state -> foldl
+                            (\state msg -> do
+                                log Debug ("processing message \"" <> msg <> "\"")
+                                state <- state
+                                interpret bot log someid program state (Just msg))
+                            (pure state)
+                            msgs
+                return ()

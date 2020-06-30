@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6fe88ea8b37c2ae55b12e956b3a605d682118538cf1479aef5f0aa7066bdc54d
+-- hash: f9b0596ec892db428ee0f74fe85a52a499694fc5161a918cc7fdad07743631ff
 
 name:           bot
 version:        0.1.0.0
@@ -30,7 +30,6 @@ library
       App
       Bot
       EchoBot
-      Lib
       Logger
       Misc
       Options
@@ -44,6 +43,8 @@ library
       Telegram.Update
       Telegram.User
       Vk
+      Vk.Message
+      Vk.Update
   other-modules:
       Paths_bot
   hs-source-dirs:
@@ -60,6 +61,7 @@ library
     , http-types ==0.12.*
     , mtl ==2.2.*
     , parsec ==3.1.*
+    , random ==1.*
     , req ==3.1.*
     , text ==1.2.*
     , time ==1.*
@@ -87,6 +89,7 @@ executable bot-exe
     , http-types ==0.12.*
     , mtl ==2.2.*
     , parsec ==3.1.*
+    , random ==1.*
     , req ==3.1.*
     , text ==1.2.*
     , time ==1.*
@@ -115,6 +118,7 @@ test-suite bot-test
     , http-types ==0.12.*
     , mtl ==2.2.*
     , parsec ==3.1.*
+    , random ==1.*
     , req ==3.1.*
     , text ==1.2.*
     , time ==1.*

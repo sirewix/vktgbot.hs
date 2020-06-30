@@ -10,21 +10,15 @@ import Data.Text(Text)
 import SerDe
 
 data Json = Json
-    { _id      :: Int -- integer	идентификатор сообщения (не возвращается для пересланных сообщений).
-    , _user_id :: Int -- integer	идентификатор пользователя, в диалоге с которым находится сообщение.
-    , _from_id :: Int -- integer	идентификатор автора сообщения.  положительное число
-    , _date    :: Int -- integer	дата отправки сообщения в формате Unixtime.
-    , _body    :: Maybe Text -- string	текст сообщения.
+    { _id          :: Int -- integer	идентификатор сообщения.
+    , _date        :: Int -- integer	время отправки в Unixtime.
+    , _peer_id     :: Int -- integer	идентификатор назначения.
+    , _from_id     :: Int -- integer	идентификатор отправителя.
+    , _text        :: Text -- string	текст сообщения.
+    , _random_id   :: Int  -- integer	идентификатор, используемый при отправке сообщения. Возвращается только для исходящих сообщений.
+    , _important   :: Bool -- boolean	true, если сообщение помечено как важное.
     } deriving (Generic, Show)
 
 instance FromJSON Json where
     parseJSON = genericParseJSON customParseOptions
 
-{-
-deleted integer, [0,1]	удалено ли сообщение.
-random_id integer	идентификатор, используемый при отправке сообщения. Возвращается только для исходящих сообщений.
-
-Дополнительные поля в сообщениях из мультидиалогов
-
-chat_id integer	идентификатор беседы.
--}
