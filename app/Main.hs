@@ -6,11 +6,12 @@ import Bot
 import EchoBot
 import Logger
 import Network.HTTP.Client
-import Network.HTTP.Client.TLS
 import Control.Concurrent.Async
+import Control.Concurrent.MVar
+import Data.Text(Text,pack,unpack)
 import Options
 import Result
-import Storage
+import Misc
 import System.IO(stdout)
 import qualified Telegram
 import qualified Vk
@@ -18,29 +19,29 @@ import qualified Vk
 main :: IO ()
 main = do
     options <- getOptions
-    log <- newLogger stdout (logLevel options)
+    loglvl <- resToIO . maybeToRes "Can't parse logLevel" $ maybe (Just Warning) readT (lookup "logLevel" options)
+    logOutput <- newMVar stdout
+    let log = newLogger logOutput loglvl
+    tgopts <- resToIO $ mkBotOptions "tg" options
+    vkopts <- resToIO $ mkBotOptions "vk" options
+    echoopts <- resToIO $ mkEchoBotOptions options
 
-    let settings = managerSetProxy
-            (proxyEnvironment . botProxy $ options)
-            tlsManagerSettings
-            -- defaultManagerSettings
-        defState' = defState options
-        program = echoBot options
-    manager <- newManager settings
 
-    let vk = case tgToken options of
-              Just token -> do
-                tgStorage <- Bot.newStorage
-                runBot (Telegram.withHandle token) (sublog "Telegram: " log) manager program tgStorage defState'
-              Nothing ->
-                log Info "Telegram token was not found, skipping"
+    defState' <- resToIO $ defState options
+    let program = echoBot echoopts
+    log Debug . pack . show $ options
 
-    let tg = case (vkToken options, vkGroupId options) of
-              (Just token, Just group_id) -> do
-                vkStorage <- Bot.newStorage
-                runBot (Vk.withHandle token group_id)    (sublog "Vk: " log) manager program vkStorage defState'
-              (_, _) ->
-                log Info "Vkontakte group id or token was not found, skipping"
+    let tg = case lookup "tg.token" options of
+               Just token -> do
+                 runBot program defState' logOutput "Telegram: " (Telegram.withHandle (pack token)) tgopts
+               Nothing ->
+                 log Info "Telegram token was not found, skipping"
+
+    let vk = case (lookup "vk.token" options, lookup "vk.groupId" options) of
+               (Just token, Just group_id) -> do
+                 runBot program defState' logOutput "Vk: " (Vk.withHandle (pack token) (pack group_id)) vkopts
+               (_, _) ->
+                 log Info "Vkontakte group id or token was not found, skipping"
 
     concurrently vk tg
     return ()

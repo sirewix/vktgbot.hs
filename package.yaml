@@ -32,11 +32,11 @@ dependencies:
 - mtl                  == 2.2.*
 - random               == 1.*
 - parsec               == 3.1.*
-- req                  == 3.1.*
 - text                 == 1.2.*
 - time                 == 1.*
 - unordered-containers == 0.2.*
 - uri-encode           == 1.5.*
+- QuickCheck           == 2.*
 
 library:
   source-dirs: src

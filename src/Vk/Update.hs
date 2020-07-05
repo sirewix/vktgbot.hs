@@ -14,13 +14,6 @@ import SerDe
 import qualified Vk.Message as Message
 import Data.Aeson.Types
 
-    {-
-data Json = Json
-    { _type     :: -- тип события
-    , _object   :: -- объект, инициировавший событие
---    , _group_id :: -- ID сообщества, в котором произошло событие
-    }
-    -}
 
 data Update =
     NewMessage Message.Json

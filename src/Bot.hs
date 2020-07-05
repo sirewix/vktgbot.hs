@@ -7,7 +7,6 @@
 , RankNTypes
 #-}
 
-
 module Bot
   ( Bot(..)
   , BotIO(..)
@@ -15,26 +14,38 @@ module Bot
   , BotUserInteraction(..)
   , Button
   , Message
+  , interpret
   , modifyState
   , newStorage
   , readMessage
   , readState
   , runBot
+  , mkBotOptions
   , sendMessage
   , sendWithKeyboard
+  , groupMsgs
   ) where
 
-import Control.Applicative((<|>))
+--import Control.Applicative((<|>))
 import Control.Concurrent
 import Control.Monad(forever,void)
 import Control.Monad.Free
+import Text.Parsec.Char
+import Text.Parsec hiding (Ok,modifyState)
+import Text.Parsec.Text
 import Data.Hashable
 import Data.List
 import Data.Text(Text,pack,unpack)
 import Data.Traversable
+import System.IO
 import Logger
+import Network.HTTP.Client
+import Network.HTTP.Client.TLS
 import Options
-import Network.HTTP.Client(Manager)
+import Misc
+import Result
+import qualified Data.ByteString.Char8 as B
+--import qualified Network.HTTP.Client   as HttpClient
 import qualified Storage
 
 data Bot sesid = Bot
@@ -82,7 +93,6 @@ instance Functor (BotUserInteraction a) where
     fmap f (SendMessage str btns next) = SendMessage str btns (f next)
     fmap f (ModifyState g next) = ModifyState g (f next)
     fmap f (ReadState g) = ReadState (f . g)
-    -- fmap f (IOAction io) = IOAction (f <$> io)
 
 type BotIO a = Free (BotUserInteraction a )
 type Storage sesid a = Storage.Storage sesid (BotState a)
@@ -124,31 +134,66 @@ interpret bot log sesid program = interpret'
                   interpret' s msg
               Pure _ -> do
                   log Debug "Pure"
-                  let s = state { action = program }
-                  interpret' s msg
+                  return $ state { action = program }
 
 groupMsgs
     :: (Eq sesid)
-    => [(sesid, Message)]
-    -> [(sesid, [Message])]
+    => [(sesid, msg)]
+    -> [(sesid, [msg])]
 groupMsgs ((sesid, msg):rest) = (sesid, msg : map snd this) : (groupMsgs notthis)
     where (this, notthis) = partition ((==) sesid . fst) rest
 groupMsgs [] = []
 
+
+data BotOptions = BotOptions
+    { logLevel :: Logger.Priority
+    , updateDelay :: Integer
+    , managerSettings :: ManagerSettings
+    }
+
+mkBotOptions :: String -> [Opt] -> Result BotOptions
+mkBotOptions mod opts = do
+    proxy  <- maybe (Ok Nothing) (fmap Just <$> toProxy . pack) (lookupMod mod "proxy" opts)
+    loglvl <- opt "logLevel" Logger.Warning
+    delay  <- opt "delay" 3000000
+    return BotOptions
+        { logLevel = loglvl
+        , updateDelay = delay
+        , managerSettings = managerSetProxy
+            (proxyEnvironment proxy)
+            tlsManagerSettings
+        }
+        where opt k def = maybeToRes ("Unexpected " <> k) $ maybe (Just def) readT (lookupMod mod k opts)
+
+toProxy :: Text -> Result Proxy
+toProxy = parseToRes "proxy" $ do
+    spaces
+    host <- many1 $ alphaNum <|> oneOf "_."
+    char ':'
+    port <- int
+    spaces
+    eof
+    return $ Proxy
+        { proxyHost = B.pack host
+        , proxyPort = port }
+
 runBot
     :: (Show k, Eq k, Hashable k)
-    => (Logger -> Manager -> (Bot k -> IO ()) -> IO ())
-    -> Logger
-    -> Manager
-    -> BotIO s ()
-    -> Storage k s
+    => BotIO s ()
     -> s
+    -> MVar System.IO.Handle
+    -> Text
+    -> (Logger -> Manager -> (Bot k -> IO ()) -> IO ())
+    -> BotOptions
     -> IO ()
-runBot withHandle log mgr program db defState = do
+runBot program defState logOutput prefix withHandle options = do
+    mgr <- newManager (managerSettings options)
+    db <- Bot.newStorage
+    let log = sublog prefix $ newLogger logOutput (logLevel options)
     withHandle log mgr $ \bot -> do
         log Info "starting bot"
         void . forever $ do
-            threadDelay 3000000
+            threadDelay (updateDelay options)
             forkIO $ do
                 log Debug "recieving updates"
                 msgs <- apiGetMessages bot

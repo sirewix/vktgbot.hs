@@ -5,23 +5,35 @@ module EchoBot
   ( echoBot
   , defState
   , EchoBotState
+  , mkEchoBotOptions
   ) where
 
 import Bot
 import Control.Applicative
 import Data.Char
-import Data.Text(pack,unpack)
+import Data.Text(Text,pack,unpack)
 import Options
+import Result
 import Misc
 
 newtype EchoBotState = EchoBotState
     { nrepeat :: Int }
 
-defState :: BotOptions -> EchoBotState
-defState options = EchoBotState
-    { nrepeat = repeatTimes options }
+newtype EchoBotOptions = EchoBotOptions
+    { helpText :: Text }
 
-echoBot :: BotOptions -> BotIO EchoBotState ()
+mkEchoBotOptions :: [Opt] -> Result EchoBotOptions
+mkEchoBotOptions opts = pure $ EchoBotOptions
+    { helpText = maybe "I don't know who am I" pack $ lookup "helpText" opts }
+
+defState :: [Opt]  -> Result EchoBotState
+defState opts = do
+    nrepit <- opt "repeatTimes" 5
+    return $ EchoBotState
+        { nrepeat = nrepit }
+    where opt k def = maybeToRes ("Unexpected " <> k) $ maybe (Just def) readT (lookup k opts)
+
+echoBot :: EchoBotOptions -> BotIO EchoBotState ()
 echoBot opts = do
     input <- readMessage
     case matchCmd (unpack input) of
@@ -34,7 +46,7 @@ echoBot opts = do
           sequence $ map (const $ sendMessage input) [1..(nrepeat state)]
           return ()
 
-command :: BotOptions -> String -> Maybe (String -> BotIO EchoBotState ())
+command :: EchoBotOptions -> String -> Maybe (String -> BotIO EchoBotState ())
 command opts cmd = pure opts <**>
     case cmd of
       "start"  -> Just help
@@ -42,10 +54,10 @@ command opts cmd = pure opts <**>
       "repeat" -> Just repeatCmd
       unknown  -> Nothing
 
-help :: BotOptions -> String -> BotIO s ()
+help :: EchoBotOptions -> String -> BotIO s ()
 help opts _ = sendMessage (helpText opts)
 
-repeatCmd :: BotOptions -> String -> BotIO EchoBotState ()
+repeatCmd :: EchoBotOptions -> String -> BotIO EchoBotState ()
 repeatCmd _ _ = do
     -- sendMessage "How many times do you want your message repeated?"
     state <- readState

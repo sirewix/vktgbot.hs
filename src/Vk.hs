@@ -32,7 +32,7 @@ import qualified Data.Aeson              as A
 import qualified Data.Aeson.Types        as A
 import qualified Data.Text               as T
 import qualified Data.Text.Lazy.Encoding as LE
-import qualified Network.URI.Encode      as U
+import qualified Network.URI.Encode      as URI
 import qualified Vk.Message              as Message
 
 getLongPollServer log vkpre group_id = do
@@ -61,17 +61,11 @@ withHandle token group_id log mgr f = do
         getServer = do
             (key, server, tss) <- getLongPollServer log vkpre group_id
             let (Just ts) = readT tss :: Maybe Int
-            {-
-            let new_ts = maybe
-                        (error "ts string does not contain a valid number")
-                        id
-                        (readT ts :: Maybe Int)
-            -}
             return (key, server, ts)
 
 query :: [(Text, Text)] -> Text
 query pairs = "?" <> intercalate "&" (map f pairs)
-    where f (k, v) = k <> "=" <> U.encodeText v
+    where f (k, v) = k <> "=" <> URI.encodeText v
 
 (=:) :: a -> b -> (a, b)
 a =: b = (a, b)
