@@ -6,9 +6,9 @@ cabal-version: 1.12
 
 name:           bot
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/bot#readme>
-homepage:       https://github.com/wixe/hbot#readme
-bug-reports:    https://github.com/wixe/hbot/issues
+description:    Please see the README on GitHub at <https://github.com/wixe/vktgbot.hs#readme>
+homepage:       https://github.com/wixe/vktgbot.hs#readme
+bug-reports:    https://github.com/wixe/vktgbot.hs/issues
 author:         Wixe
 maintainer:     wixe@ya.ru
 copyright:      2020 Me
@@ -21,7 +21,7 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/wixe/hbot
+  location: https://github.com/wixe/vktgbot.hs
 
 library
   exposed-modules:

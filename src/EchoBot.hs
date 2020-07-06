@@ -24,7 +24,11 @@ newtype EchoBotOptions = EchoBotOptions
 
 mkEchoBotOptions :: [Opt] -> Result EchoBotOptions
 mkEchoBotOptions opts = pure $ EchoBotOptions
-    { helpText = maybe "I don't know who am I" pack $ lookup "helpText" opts }
+    { helpText = maybe helptxt pack $ lookup "helpText" opts }
+        where helptxt =
+                   "Hi, this is simple echo bot"
+                <> "/help — this message"
+                <> "/repeat — set repeat"
 
 defState :: [Opt]  -> Result EchoBotState
 defState opts = do

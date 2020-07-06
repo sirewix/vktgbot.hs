@@ -72,7 +72,6 @@ testGroupMsgs :: [Int] -> Bool
 testGroupMsgs x = let res = map fst . groupMsgs . map (\x -> (x, "")) $ x
                    in res == nub res
 
--- (***) :: (a -> a') -> (b -> b') -> (a, b) -> (a', b')
 testInterpret :: BotIO s () -> s -> [Message] -> (s, [(Message, Maybe [Button])])
 testInterpret program state msgs = id *** reverse $ interpret' program (state, []) msgs
   where interpret' action (state, out) msgs =
