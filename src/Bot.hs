@@ -26,26 +26,24 @@ module Bot
   , groupMsgs
   ) where
 
---import Control.Applicative((<|>))
 import Control.Concurrent
 import Control.Monad(forever,void)
 import Control.Monad.Free
-import Text.Parsec.Char
-import Text.Parsec hiding (Ok,modifyState)
-import Text.Parsec.Text
 import Data.Hashable
 import Data.List
 import Data.Text(Text,pack,unpack)
 import Data.Traversable
-import System.IO
 import Logger
+import Misc
 import Network.HTTP.Client
 import Network.HTTP.Client.TLS
 import Options
-import Misc
 import Result
+import System.IO
+import Text.Parsec hiding (Ok,modifyState)
+import Text.Parsec.Char
+import Text.Parsec.Text
 import qualified Data.ByteString.Char8 as B
---import qualified Network.HTTP.Client   as HttpClient
 import qualified Storage
 
 data Bot sesid = Bot
@@ -71,7 +69,6 @@ data BotUserInteraction a next =
   | SendMessage Text (Maybe [Button]) next
   | ModifyState (a -> a) next
   | ReadState (a -> next)
---  | IOAction (IO (next))
 
 readMessage :: BotIO s Message
 readMessage = Free (ReadMessage (\str -> Pure str))
@@ -99,7 +96,6 @@ type Storage sesid a = Storage.Storage sesid (BotState a)
 
 newStorage :: (Eq sesid, Hashable sesid) => IO (Storage sesid a)
 newStorage = Storage.newStorage
--- newStorage = Storage.newStorage :: IO (Storage.Storage sesid (BotState a))
 
 interpret
     :: Bot k
@@ -147,7 +143,7 @@ groupMsgs [] = []
 
 data BotOptions = BotOptions
     { logLevel :: Logger.Priority
-    , updateDelay :: Integer
+    , updateDelay :: Int
     , managerSettings :: ManagerSettings
     }
 

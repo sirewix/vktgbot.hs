@@ -9,19 +9,16 @@ data Result a = Ok a | Err String
     deriving(Show)
 
 instance Functor Result where
---  fmap :: (a -> b) -> Result a -> Result b
     fmap f (Ok a) = Ok(f a)
     fmap f (Err e) = Err(e)
 
 instance Applicative Result where
     pure a = Ok a
---  (<*>) :: Result (a -> b) -> Result a -> Result b
     Ok  f <*> Ok  a = Ok (f a)
     Ok  _ <*> Err e = Err (e)
     Err e <*> _     = Err (e)
 
 instance Monad Result where
---  (>>=) :: Result a -> (a -> Result b) -> Result b infixl 1
     Ok a >>= f = f a
     Err e >>= _ = Err e
 

@@ -115,9 +115,6 @@ getEnvOpts = do
         fromEnv '_' = '.'
         fromEnv c = c
 
--- optionsList :: [String]
--- optionsList = concat $ map constrFields (dataTypeConstrs (dataTypeOf (undefined::BotOptions)))
-
 type Opt = (String, String)
 
 lookupMod mod key opts =

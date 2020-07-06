@@ -43,21 +43,17 @@ getLongPollServer log vkpre group_id = do
         ts     <- obj .: "ts"     :: A.Parser String -- (string) — timestamp.
         return (key, server, ts)
 
---withHandle :: Logger -> BotOptions -> Manager -> (Bot.Bot (Int, Int) -> IO ()) -> IO ()
 withHandle token group_id log mgr f = do
     stuff@(key, server, ts) <- getServer
     stuff <- newMVar stuff
     log Info $ "recieved a server and a key | " <> server
     let vkpoll serv = vkreq serv parseUpdate ""
-    {- apiSendMessage :: !(sesid -> Message -> Maybe [Button] -> IO ())
-    ,  apiGetMessages :: !(IO [(sesid, Message)]) -}
     f $ Bot.Bot
         { Bot.apiSendMessage = sendMessage vkpre log group_id
         , Bot.apiGetMessages = getMessages vkpoll log stuff getServer
         }
   where vkreq = runVk log mgr token
         vkpre = vkreq "https://api.vk.com/method/" parseResult
-        --getServer :: IO (String, String, Int)
         getServer = do
             (key, server, tss) <- getLongPollServer log vkpre group_id
             let (Just ts) = readT tss :: Maybe Int
@@ -66,9 +62,6 @@ withHandle token group_id log mgr f = do
 query :: [(Text, Text)] -> Text
 query pairs = "?" <> intercalate "&" (map f pairs)
     where f (k, v) = k <> "=" <> URI.encodeText v
-
-(=:) :: a -> b -> (a, b)
-a =: b = (a, b)
 
 runVk log mgr token server parse method params = do
     let params' =
@@ -87,7 +80,6 @@ runVk log mgr token server parse method params = do
         parse
         (A.decode resbody)
 
--- parseResult :: (A.FromJSON a) => A.Value -> Result a
 parseResult v = eitherToRes =<< (eitherToRes . A.parseEither parser $ v)
     where parser = A.withObject "" $ \obj -> do
              res <- obj .:?  "response"

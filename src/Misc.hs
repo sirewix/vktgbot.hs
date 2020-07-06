@@ -2,6 +2,7 @@
 module Misc( readT
            , int
            , parseToRes
+           , (=:)
            ) where
 
 import Data.Maybe(listToMaybe)
@@ -24,3 +25,7 @@ showShort err = -- copied from parsec source code
                       (errorMessages err)
 
 parseToRes what parser = either (Err . (("Error parsing " <> what <> ": ") <>) . showShort) (Ok) . parse parser ""
+
+(=:) :: a -> b -> (a, b)
+a =: b = (a, b)
+

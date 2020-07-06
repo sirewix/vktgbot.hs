@@ -1,12 +1,12 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module EchoBot
-  ( echoBot
-  , defState
-  , EchoBotState
-  , mkEchoBotOptions
-  ) where
+module EchoBot ( EchoBotState(..)
+               , EchoBotOptions(..)
+               , defState
+               , echoBot
+               , mkEchoBotOptions
+               ) where
 
 import Bot
 import Control.Applicative

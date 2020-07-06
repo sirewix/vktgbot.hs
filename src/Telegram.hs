@@ -63,11 +63,7 @@ runTg log mgr token method body = do
                 [ ("Content-Type", "application/json; charset=utf-8") ]
             }
     res <- httpLbs req mgr
-    {-let status  = responseStatus res
-        code    = statusCode status
-        statmsg = statusMessage status -}
     let resbody = responseBody res
-
     log Debug $ "recieved " <> (toStrict . LE.decodeUtf8 $ A.encode body)
     resToM $ maybe
         (Err "Decoding error")

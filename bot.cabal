@@ -3,8 +3,6 @@ cabal-version: 1.12
 -- This file has been generated from package.yaml by hpack version 0.34.1.
 --
 -- see: https://github.com/sol/hpack
---
--- hash: 2a668d7feda45538fc1fa942d12606b9731946f4c81e0d9b95f854c62acdf7b1
 
 name:           bot
 version:        0.1.0.0
@@ -27,7 +25,6 @@ source-repository head
 
 library
   exposed-modules:
-      App
       Bot
       EchoBot
       Logger
@@ -63,7 +60,6 @@ library
     , mtl ==2.2.*
     , parsec ==3.1.*
     , random ==1.*
-    , req ==3.1.*
     , text ==1.2.*
     , time ==1.*
     , unordered-containers ==0.2.*
@@ -92,7 +88,6 @@ executable bot-exe
     , mtl ==2.2.*
     , parsec ==3.1.*
     , random ==1.*
-    , req ==3.1.*
     , text ==1.2.*
     , time ==1.*
     , unordered-containers ==0.2.*
@@ -122,7 +117,6 @@ test-suite bot-test
     , mtl ==2.2.*
     , parsec ==3.1.*
     , random ==1.*
-    , req ==3.1.*
     , text ==1.2.*
     , time ==1.*
     , unordered-containers ==0.2.*
