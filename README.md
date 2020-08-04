@@ -23,7 +23,7 @@ Use `--config` parameter to specify config file. It consists of key value pairs,
 ```
 # Config file for the bot
 
-# botProxy  = 127.0.0.1:9080
+# tg.proxy  = 127.0.0.1:9080
 tg.token  = 1258788986:AAErwZlr
 
 logLevel = Debug

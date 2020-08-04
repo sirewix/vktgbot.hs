@@ -1,16 +1,14 @@
 module SerDe
-    ( customParseOptions
-    , enumParseOptions
-    ) where
+  ( customParseOptions
+  , enumParseOptions
+  )
+where
 
-import Data.Aeson
-import Data.Char
+import           Data.Aeson
+import           Data.Char
 
 prefix = "_"
-customParseOptions = defaultOptions
-    { fieldLabelModifier = drop (length prefix)
-    }
+customParseOptions = defaultOptions { fieldLabelModifier = drop (length prefix) }
 
-enumParseOptions = defaultOptions
-    { constructorTagModifier = \(x:xs) -> toLower x : xs
-    }
+enumParseOptions =
+  defaultOptions { constructorTagModifier = \(x : xs) -> toLower x : xs }
