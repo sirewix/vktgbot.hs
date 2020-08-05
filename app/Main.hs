@@ -15,6 +15,7 @@ import           Options
 import           Result
 import           Misc
 import           System.IO                      ( stdout )
+import           System.Exit
 import qualified Telegram
 import qualified Vk
 
@@ -27,12 +28,15 @@ main = do
     (lookup "logLevel" options)
   logOutput <- newMVar stdout
   let log = newLogger logOutput loglvl
-  tgopts    <- resToIO $ mkBotOptions "tg" options
-  vkopts    <- resToIO $ mkBotOptions "vk" options
-  echoopts  <- resToIO $ mkEchoBotOptions options
+      loggedRes r = case r of
+          Ok  a -> return a
+          Err e -> log Error (pack e) >> exitFailure
+  tgopts    <- loggedRes $ mkBotOptions "tg" options
+  vkopts    <- loggedRes $ mkBotOptions "vk" options
+  echoopts  <- loggedRes $ mkEchoBotOptions options
 
 
-  defState' <- resToIO $ defState options
+  defState' <- loggedRes $ defState options
   let program = echoBot echoopts
   log Debug . pack . show $ options
 

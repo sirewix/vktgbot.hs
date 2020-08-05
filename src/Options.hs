@@ -27,9 +27,7 @@ getOptions = do -- IO
   args     <- getArgs
   env      <- getEnvOpts
   cliArgs  <- resToIO $ parseArgs args
-  fromConf <- case lookup "config" cliArgs of
-    Nothing    -> return ([] :: [Opt])
-    Just fname -> fromConfig fname
+  fromConf <- maybe (pure []) fromConfig $ lookup "config" cliArgs
   return (cliArgs ++ env ++ fromConf)
 
 fromConfig :: FilePath -> IO [Opt]
