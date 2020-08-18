@@ -26,17 +26,16 @@ source-repository head
 library
   exposed-modules:
       Bot
+      Deserialization
       EchoBot
       Logger
       Misc
       Options
       Result
-      SerDe
       Storage
       Telegram
       Telegram.Chat
       Telegram.Message
-      Telegram.Result
       Telegram.Update
       Telegram.User
       Vk

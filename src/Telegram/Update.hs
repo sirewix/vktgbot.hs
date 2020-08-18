@@ -4,9 +4,12 @@ module Telegram.Update
   )
 where
 
-import           Data.Aeson
-import           GHC.Generics
-import           SerDe
+import           Data.Aeson                     ( FromJSON
+                                                , parseJSON
+                                                , genericParseJSON
+                                                )
+import           Deserialization                ( customParseOptions )
+import           GHC.Generics                   ( Generic )
 import qualified Telegram.Message              as Message
 
 data Json = Json

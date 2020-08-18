@@ -5,9 +5,12 @@ module Telegram.Message
   )
 where
 
-import           Data.Aeson                    as Aeson
-import           GHC.Generics
-import           SerDe
+import           Data.Aeson                     ( FromJSON
+                                                , parseJSON
+                                                , genericParseJSON
+                                                )
+import           Deserialization                ( customParseOptions )
+import           GHC.Generics                   ( Generic )
 import qualified Data.Text                     as T
 import qualified Telegram.Chat                 as Chat
 import qualified Telegram.User                 as User

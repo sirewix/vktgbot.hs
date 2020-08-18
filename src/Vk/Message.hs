@@ -3,11 +3,13 @@ module Vk.Message
     ( Json(..)
     ) where
 
-import Data.Aeson as Aeson
-import GHC.Generics
-import Data.Text(Text)
-
-import SerDe
+import           Data.Aeson                     ( FromJSON
+                                                , parseJSON
+                                                , genericParseJSON
+                                                )
+import           Data.Text                      ( Text )
+import           Deserialization                ( customParseOptions )
+import           GHC.Generics                   ( Generic )
 
 data Json = Json
     { _id          :: Int -- integer	идентификатор сообщения.

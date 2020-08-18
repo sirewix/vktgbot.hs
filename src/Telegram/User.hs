@@ -3,9 +3,12 @@ module Telegram.User
     ( Json(..)
     ) where
 
-import           Data.Aeson
-import           GHC.Generics
-import           SerDe
+import           Data.Aeson                     ( FromJSON
+                                                , parseJSON
+                                                , genericParseJSON
+                                                )
+import           Deserialization                ( customParseOptions )
+import           GHC.Generics                   ( Generic )
 
 data Json = Json
   { _id                          :: Int -- Unique identifier for this user or bot

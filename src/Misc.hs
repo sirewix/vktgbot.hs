@@ -1,20 +1,21 @@
 {-# LANGUAGE FlexibleContexts #-}
 module Misc
-  ( readT
-  , int
+  ( int
   , parseToRes
   , (=:)
   )
 where
 
-import           Data.Maybe                     ( listToMaybe )
-import           Result
-import           Text.Parsec             hiding ( Ok )
-import           Text.Parsec.Error
-import           Text.Parsec.Text
-
-readT :: (Read a) => String -> Maybe a
-readT str = fst <$> listToMaybe (reads str)
+import           Result                         ( Result(..) )
+import           Text.Parsec                    ( many1
+                                                , digit
+                                                , parse
+                                                )
+import           Text.Parsec.Error              ( ParseError
+                                                , showErrorMessages
+                                                , errorMessages
+                                                )
+import           Text.Parsec.Text               ( Parser )
 
 int :: Parser Int
 int = read <$> many1 digit

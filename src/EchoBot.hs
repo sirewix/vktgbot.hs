@@ -10,19 +10,28 @@ module EchoBot
   )
 where
 
-import           Bot
-import           Control.Applicative
-import           Data.Char
+import           Bot                            ( BotIO
+                                                , modifyState
+                                                , readMessage
+                                                , readState
+                                                , sendMessage
+                                                , sendWithKeyboard
+                                                )
+import           Control.Applicative            ( (<**>) )
+import           Data.Char                      ( isAlphaNum )
 import           Data.Text                      ( Text
                                                 , pack
                                                 , unpack
                                                 )
-import           Misc
-import           Options
-import           Result
+import           Options                        ( Opt )
+import           Result                         ( Result
+                                                , maybeToRes
+                                                )
+import           Text.Read                      ( readMaybe )
 
 newtype EchoBotState = EchoBotState
     { nrepeat :: Int }
+    deriving (Eq, Show)
 
 newtype EchoBotOptions = EchoBotOptions
     { helpText :: Text }
@@ -39,7 +48,7 @@ defState opts = do
   nrepit <- opt "repeatTimes" 5
   return $ EchoBotState { nrepeat = nrepit }
  where
-  opt k def = maybeToRes ("Unexpected " <> k) $ maybe (Just def) readT (lookup k opts)
+  opt k def = maybeToRes ("Unexpected " <> k) $ maybe (Just def) readMaybe (lookup k opts)
 
 echoBot :: EchoBotOptions -> BotIO EchoBotState ()
 echoBot opts = do
@@ -64,7 +73,6 @@ help opts _ = sendMessage (helpText opts)
 
 repeatCmd :: EchoBotOptions -> String -> BotIO EchoBotState ()
 repeatCmd _ _ = do
-    -- sendMessage "How many times do you want your message repeated?"
   state <- readState
   sendWithKeyboard
     (  "How many times do you want your message repeated? Now it is "
@@ -72,7 +80,7 @@ repeatCmd _ _ = do
     )
     (map (pack . show) ([1 .. 5] :: [Int]))
   msg <- readMessage
-  case readT (unpack msg) of
+  case readMaybe (unpack msg) of
     Just n -> do
       modifyState $ \state -> state { nrepeat = n }
       sendMessage
@@ -86,11 +94,3 @@ matchCmd (first : msg)
   | otherwise                          = Nothing
   where (cmd, rest) = span isAlphaNum msg
 matchCmd [] = Nothing
-
-{-
-doubleEchoBot :: BotIO EchoBotState ()
-doubleEchoBot = do
-    msg1 <- readMessage
-    msg2 <- readMessage
-    sendMessage ("Pair of messages (" <> msg1 <> ", " <> msg2 <> ")")
--}

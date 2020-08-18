@@ -5,17 +5,27 @@ module Main
   )
 where
 
-import           Bot
-import           EchoBot
-import           Logger
-import           Control.Concurrent.Async
-import           Control.Concurrent.MVar
+import           Bot                            ( mkBotOptions
+                                                , runBot
+                                                )
+import           EchoBot                        ( mkEchoBotOptions
+                                                , echoBot
+                                                , defState
+                                                )
+import           Logger                         ( Priority(..)
+                                                , newLogger
+                                                )
+import           Control.Concurrent.Async       ( concurrently )
+import           Control.Concurrent.MVar        ( newMVar )
 import           Data.Text                      ( pack )
-import           Options
-import           Result
-import           Misc
+import           Options                        ( getOptions )
+import           Result                         ( Result(..)
+                                                , maybeToRes
+                                                , resToIO
+                                                )
 import           System.IO                      ( stdout )
-import           System.Exit
+import           System.Exit                    ( exitFailure )
+import           Text.Read                      ( readMaybe )
 import qualified Telegram
 import qualified Vk
 
@@ -24,7 +34,7 @@ main = do
   options <- getOptions
   loglvl  <- resToIO . maybeToRes "Can't parse logLevel" $ maybe
     (Just Warning)
-    readT
+    readMaybe
     (lookup "logLevel" options)
   logOutput <- newMVar stdout
   let log = newLogger logOutput loglvl
@@ -34,7 +44,6 @@ main = do
   tgopts    <- loggedRes $ mkBotOptions "tg" options
   vkopts    <- loggedRes $ mkBotOptions "vk" options
   echoopts  <- loggedRes $ mkEchoBotOptions options
-
 
   defState' <- loggedRes $ defState options
   let program = echoBot echoopts
@@ -48,7 +57,7 @@ main = do
                  "Telegram: "
                  (Telegram.withHandle (pack token))
                  tgopts
-        Nothing -> log Info "Telegram token was not found, skipping"
+        Nothing -> log Warning "Telegram token was not found, skipping"
 
   let vk = case (lookup "vk.token" options, lookup "vk.groupId" options) of
         (Just token, Just group_id) -> do
@@ -58,7 +67,7 @@ main = do
                  "Vk: "
                  (Vk.withHandle (pack token) (pack group_id))
                  vkopts
-        (_, _) -> log Info "Vkontakte group id or token was not found, skipping"
+        (_, _) -> log Warning "Vkontakte group id or token was not found, skipping"
 
   _ <- concurrently vk tg
   return ()

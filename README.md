@@ -1,5 +1,5 @@
 # Echo bot for Telegram & Vk.com
-This repo contains my attempt to learn haskell by creating simple echo bot with simple API.
+This repo contains my attempt to learn haskell by creating simple echo bot.
 ```shell
 stack build
 stack test
@@ -45,3 +45,23 @@ Per API options can be used with `tg.` or `vk.` prefix. If used as is the option
 | `tg.token`    | For Tg API | String                                    | --        | Telegram bot token            |
 | `vk.groupId`  | For Vk API | Integer                                   | --        | Vkontakte group id            |
 | `vk.token`    | For Vk API | String                                    | --        | Vkontakte group token         |
+
+## Project structure
+| Module                                      | Description                                                               |
+|---------------------------------------------|---------------------------------------------------------------------------|
+| [Bot](src/Bot.hs)                           | Interface of a bot                                                        |
+| [EchoBot](src/EchoBot.hs)                   | Implementation of echo bot logic                                          |
+| [Logger](src/Logger.hs)                     | Logger definition and implementation                                      |
+| [Misc](src/Misc.hs)                         | Miscellaneous functions                                                   |
+| [Options](src/Options.hs)                   | Reading options from CLI arguments, environment variables and config file |
+| [Result](src/Result.hs)                     | Custom generic result type                                                |
+| [Deserialization](src/Deserialization.hs)   | Common JSON deserialization options                                       |
+| [Storage](src/Storage.hs)                   | Storing clients data in RAM                                               |
+| [Telegram](src/Telegram.hs)                 | Telegram API interface of a bot                                           |
+| [Telegram.Chat](src/Telegram/Chat.hs)       | Telegram chat object                                                      |
+| [Telegram.Message](src/Telegram/Message.hs) | Telegram message object                                                   |
+| [Telegram.Update](src/Telegram/Update.hs)   | Telegram update object                                                    |
+| [Telegram.User](src/Telegram/User.hs)       | Telegram user object                                                      |
+| [Vk](src/Vk.hs)                             | Vkontakte API interface of a bot                                          |
+| [Vk.Message](src/Vk/Message.hs)             | Vkontakte message object                                                  |
+| [Vk.Update](src/Vk/Update.hs)               | Vkontakte update object                                                   |

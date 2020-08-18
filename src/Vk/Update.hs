@@ -7,8 +7,12 @@ module Vk.Update
   )
 where
 
-import           Data.Aeson
-import           Data.Aeson.Types
+import           Data.Aeson.Types               ( (.:)
+                                                , FromJSON
+                                                , Parser
+                                                , parseJSON
+                                                , withObject
+                                                )
 import           Data.Text                      ( Text )
 import qualified Vk.Message                    as Message
 

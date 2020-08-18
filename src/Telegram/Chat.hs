@@ -4,10 +4,14 @@ module Telegram.Chat
     , CType
     ) where
 
-import Data.Aeson
-import GHC.Generics
-
-import SerDe
+import           Data.Aeson                     ( FromJSON
+                                                , parseJSON
+                                                , genericParseJSON
+                                                )
+import           Deserialization                ( enumParseOptions
+                                                , customParseOptions
+                                                )
+import           GHC.Generics                   ( Generic )
 
 data CType = Private | Group | Supergroup | Channel
     deriving (Generic, Show)
@@ -22,16 +26,6 @@ data Json = Json
     , _username   :: Maybe String -- Optional. Username, for private chats, supergroups and channels if available
     , _first_name :: Maybe String -- Optional. First name of the other party in a private chat
     , _last_name  :: Maybe String -- Optional. Last name of the other party in a private chat
-{-
-photo :: ChatPhoto -- Optional. Chat photo. Returned only in getChat.
-description :: String -- Optional. Description, for groups, supergroups and channel chats. Returned only in getChat.
-invite_link :: String -- Optional. Chat invite link, for groups, supergroups and channel chats. Each administrator in a chat generates their own invite links, so the bot must first generate the link using exportChatInviteLink. Returned only in getChat.
-pinned_message :: Message -- Optional. Pinned message, for groups, supergroups and channels. Returned only in getChat.
-permissions :: ChatPermissions -- Optional. Default chat member permissions, for groups and supergroups. Returned only in getChat.
-slow_mode_delay :: Integer -- Optional. For supergroups, the minimum allowed delay between consecutive messages sent by each unpriviledged user. Returned only in getChat.
-sticker_set_name :: String -- Optional. For supergroups, name of group sticker set. Returned only in getChat.
-can_set_sticker_set :: Boolean -- Optional. True, if the bot can change the group sticker set. Returned only in getChat.
--}
     } deriving (Generic, Show)
 
 instance FromJSON Json where

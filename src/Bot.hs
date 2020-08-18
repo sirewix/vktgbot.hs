@@ -27,29 +27,48 @@ module Bot
   )
 where
 
-import           Control.Concurrent
+import           Control.Concurrent             ( MVar
+                                                , forkIO
+                                                , threadDelay
+                                                )
 import           Control.Monad                  ( forever
                                                 , void
                                                 )
-import           Control.Monad.Free
+import           Control.Monad.Free             ( Free(..) )
 import           Data.Foldable                  ( for_ )
-import           Data.Hashable
-import           Data.List
+import           Data.Hashable                  ( Hashable )
+import           Data.List                      ( partition )
 import           Data.Text                      ( Text
                                                 , pack
                                                 )
-import           Logger
-import           Misc
-import           Network.HTTP.Client
-import           Network.HTTP.Client.TLS
-import           Options
-import           Result
-import           System.IO
-import           Text.Parsec             hiding ( Ok
-                                                , modifyState
+import           Logger                         ( Logger
+                                                , Priority(..)
+                                                , sublog
+                                                , newLogger
                                                 )
+import           Misc                           ( int
+                                                , parseToRes
+                                                )
+import           Options                        ( Opt
+                                                , lookupMod
+                                                )
+import           Result                         ( Result(..)
+                                                , maybeToRes
+                                                )
+import           Text.Parsec                    ( (<|>)
+                                                , alphaNum
+                                                , char
+                                                , eof
+                                                , many1
+                                                , oneOf
+                                                , spaces
+                                                )
+import           Text.Read                      ( readMaybe )
 import qualified Data.ByteString.Char8         as B
+import qualified Network.HTTP.Client           as HTTP
+import qualified Network.HTTP.Client.TLS       as HTTP
 import qualified Storage
+import qualified System.IO
 
 data Bot sesid = Bot
     { apiSendMessage :: !(sesid -> Message -> Maybe [Button] -> IO ())
@@ -135,26 +154,26 @@ groupMsgs [] = []
 
 
 data BotOptions = BotOptions
-    { logLevel :: Logger.Priority
+    { logLevel :: Priority
     , updateDelay :: Int
-    , managerSettings :: ManagerSettings
+    , managerSettings :: HTTP.ManagerSettings
     }
 
 mkBotOptions :: String -> [Opt] -> Result BotOptions
 mkBotOptions mod opts = do
   proxy  <- maybe (Ok Nothing) (fmap Just <$> toProxy . pack) (lookupMod mod "proxy" opts)
-  loglvl <- opt "logLevel" Logger.Warning
+  loglvl <- opt "logLevel" Warning
   delay  <- opt "delay" 3000000
   return BotOptions
     { logLevel        = loglvl
     , updateDelay     = delay
-    , managerSettings = managerSetProxy (proxyEnvironment proxy) tlsManagerSettings
+    , managerSettings = HTTP.managerSetProxy (HTTP.proxyEnvironment proxy) HTTP.tlsManagerSettings
     }
  where
   opt k def =
-    maybeToRes ("Unexpected " <> k) $ maybe (Just def) readT (lookupMod mod k opts)
+    maybeToRes ("Unexpected " <> k) $ maybe (Just def) readMaybe (lookupMod mod k opts)
 
-toProxy :: Text -> Result Proxy
+toProxy :: Text -> Result HTTP.Proxy
 toProxy = parseToRes "proxy" $ do
   spaces
   host <- many1 $ alphaNum <|> oneOf "_."
@@ -162,7 +181,7 @@ toProxy = parseToRes "proxy" $ do
   port <- int
   spaces
   eof
-  return $ Proxy { proxyHost = B.pack host, proxyPort = port }
+  return $ HTTP.Proxy { HTTP.proxyHost = B.pack host, HTTP.proxyPort = port }
 
 runBot
   :: (Show k, Eq k, Hashable k)
@@ -170,11 +189,11 @@ runBot
   -> s
   -> MVar System.IO.Handle
   -> Text
-  -> (Logger -> Manager -> (Bot k -> IO ()) -> IO ())
+  -> (Logger -> HTTP.Manager -> (Bot k -> IO ()) -> IO ())
   -> BotOptions
   -> IO ()
 runBot program defState logOutput prefix withHandle options = do
-  mgr <- newManager (managerSettings options)
+  mgr <- HTTP.newManager (managerSettings options)
   db  <- Bot.newStorage
   let log = sublog prefix $ newLogger logOutput (logLevel options)
   withHandle log mgr $ \bot -> do

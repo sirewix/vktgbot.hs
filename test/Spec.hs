@@ -1,19 +1,34 @@
 {-# LANGUAGE
-  OverloadedStrings
-, StandaloneDeriving
-#-}
+    OverloadedStrings
+  , StandaloneDeriving
+  , TupleSections
+  #-}
 
-import Bot
-import Control.Arrow
-import Control.Monad.Free
-import Data.Functor.Classes
-import Data.List
-import Data.Text(Text,pack,unpack)
-import EchoBot
-import Logger
-import Misc
-import Result
-import Test.QuickCheck
+import           Bot                            ( BotIO
+                                                , BotUserInteraction(..)
+                                                , Button
+                                                , Message
+                                                , groupMsgs
+                                                )
+import           Control.Arrow                  ( second )
+import           Control.Monad.Free             ( Free(..) )
+import           Data.Functor.Classes           ( liftEq )
+import           Data.List                      ( nub )
+import           Data.Text                      ( Text
+                                                , pack
+                                                )
+import           EchoBot                        ( EchoBotState(..)
+                                                , echoBot
+                                                , mkEchoBotOptions
+                                                )
+import           Misc                           ( (=:) )
+import           Result                         ( resToIO )
+import           Test.QuickCheck                ( Arbitrary(..)
+                                                , arbitraryUnicodeChar
+                                                , listOf
+                                                , listOf1
+                                                , quickCheck
+                                                )
 
 newtype AnyText = AnyText { unAnyText :: Text }
     deriving Show
@@ -25,12 +40,6 @@ instance Arbitrary AnyText where
 
 instance Arbitrary NonEmptyAnyText where
     arbitrary = NonEmptyAnyText . pack <$> listOf1 arbitraryUnicodeChar
-
-deriving instance Eq EchoBotState
-deriving instance Show EchoBotState
-
-eq (Just msg, btns) (msg', btns') = msg == msg' && btns == btns'
-eq (Nothing, btns) (msg', btns') = btns == btns'
 
 main :: IO ()
 main = do
@@ -60,20 +69,20 @@ main = do
                                         , pack $ show m
                                         , str ]
             eq (Just msg, btns) (msg', btns') = msg == msg' && btns == btns'
-            eq (Nothing, btns) (msg', btns') = btns == btns'
+            eq (Nothing, btns) (_msg', btns') = btns == btns'
          in (state == EchoBotState { nrepeat = m })
-             && (liftEq eq
-                        ([ (Nothing, Just (map (pack . show) [1..5]))
-                         , (Nothing, Nothing)
-                         ] ++ map (\k -> (Nothing, Nothing)) [1..m])
-                        outs)
+             && liftEq eq
+                       ([ (Nothing, Just (map (pack . show) ([1 .. 5] :: [Int])))
+                        , (Nothing, Nothing)
+                        ] ++ map (const (Nothing, Nothing)) [1..m])
+                       outs
 
 testGroupMsgs :: [Int] -> Bool
-testGroupMsgs x = let res = map fst . groupMsgs . map (\x -> (x, "")) $ x
+testGroupMsgs x = let res = map fst . groupMsgs . map (, "" :: String) $ x
                    in res == nub res
 
 testInterpret :: BotIO s () -> s -> [Message] -> (s, [(Message, Maybe [Button])])
-testInterpret program state msgs = id *** reverse $ interpret' program (state, []) msgs
+testInterpret program state msgs = second reverse $ interpret' program (state, []) msgs
   where interpret' action (state, out) msgs =
             case action of
               Free (ReadMessage f) ->

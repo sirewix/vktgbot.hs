@@ -15,11 +15,33 @@ where
 
 import           Control.Monad                  ( void )
 import           Data.List                      ( isPrefixOf )
-import           Data.Maybe
-import           Result
-import           System.Environment
-import           Text.Parsec             hiding ( Ok )
-import           Text.Parsec.Text
+import           Data.Maybe                     ( catMaybes )
+import           Result                         ( Result
+                                                , resToIO
+                                                )
+import           System.Environment             ( getArgs
+                                                , getEnvironment
+                                                )
+import           Text.Parsec                    ( (<|>)
+                                                , alphaNum
+                                                , anyChar
+                                                , between
+                                                , char
+                                                , char
+                                                , endOfLine
+                                                , eof
+                                                , lookAhead
+                                                , many
+                                                , many1
+                                                , manyTill
+                                                , noneOf
+                                                , oneOf
+                                                , sepBy
+                                                , skipMany
+                                                , string
+                                                , try
+                                                )
+import           Text.Parsec.Text               ( parseFromFile )
 import qualified Control.Applicative           as A
 
 getOptions :: IO [Opt]

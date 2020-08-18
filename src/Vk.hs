@@ -7,32 +7,39 @@ module Vk
     ( withHandle
     ) where
 
-import           Control.Concurrent
-import           Control.Monad
+import           Control.Concurrent             ( newMVar
+                                                , modifyMVar
+                                                )
+import           Control.Monad                  ( (>=>) )
 import           Data.Aeson                     ( (.:)
                                                 , (.:?)
                                                 , (.=)
                                                 )
-import           Data.Functor
-import           Data.Int
-import           Data.Maybe
+import           Data.Functor                   ( (<&>) )
+import           Data.Int                       ( Int64 )
+import           Data.Maybe                     ( mapMaybe )
 import           Data.Text                      ( Text
                                                 , pack
                                                 , unpack
                                                 , intercalate
                                                 )
 import           Data.Text.Lazy                 ( toStrict )
-import           Logger
-import           Misc
-import           Network.HTTP.Client
-import           Result
-import           System.Random
-import           Vk.Update
+import           Logger                         ( Priority(..) )
+import           Misc                           ( (=:) )
+import           Result                         ( Result
+                                                , eitherToRes
+                                                , resToIO
+                                                , resToM
+                                                )
+import           System.Random                  ( randomIO )
+import           Text.Read                      ( readMaybe )
+import           Vk.Update                      ( Update(..) )
 import qualified Bot
 import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Types              as A
 import qualified Data.Text                     as T
 import qualified Data.Text.Lazy.Encoding       as LE
+import qualified Network.HTTP.Client           as HTTP
 import qualified Network.URI.Encode            as URI
 import qualified Vk.Message                    as Message
 
@@ -57,7 +64,7 @@ withHandle token group_id log mgr f = do
   vkpre     = vkreq "https://api.vk.com/method/" parseResult
   getServer = do
     (key, server, tss) <- getLongPollServer log vkpre group_id
-    let (Just ts) = readT tss :: Maybe Int
+    let (Just ts) = readMaybe tss :: Maybe Int
     return (key, server, ts)
 
 query :: [(Text, Text)] -> Text
@@ -66,11 +73,11 @@ query pairs = "?" <> intercalate "&" (map f pairs)
 
 runVk log mgr token server parse method params = do
   let params' = ["access_token" =: token, "v" =: "5.110"]
-  request <- parseRequest . unpack $ server <> method <> query (params' <> params)
+  request <- HTTP.parseRequest . unpack $ server <> method <> query (params' <> params)
   _       <- log Debug $ "sending " <> pack (show params)
   let req = request
-  res <- httpLbs req mgr
-  let resbody = responseBody res
+  res <- HTTP.httpLbs req mgr
+  let resbody = HTTP.responseBody res
 
   _ <- log Debug $ "recieved " <> (toStrict . LE.decodeUtf8 $ resbody)
   resToM $ maybe (error "Decoding error") parse (A.decode resbody)
@@ -100,13 +107,13 @@ parseUpdate = eitherToRes . A.parseEither parser
     case failed of
       Just 1 -> do
         tss <- obj .: "ts"
-        let (Just ts) = readT tss :: Maybe Int
+        let (Just ts) = readMaybe tss :: Maybe Int
         return (RenewTs ts)
       Just _ -> do
         return PollFail
       Nothing -> do
         tss <- obj .: "ts"
-        let (Just ts) = readT tss :: Maybe Int
+        let (Just ts) = readMaybe tss :: Maybe Int
         updates <- obj .: "updates"
         return $ VkOk ts updates
 

@@ -9,12 +9,14 @@ module Logger
   , newLogger
   ) where
 
-import           Control.Concurrent
-import           Control.Monad
+import           Control.Concurrent             ( MVar
+                                                , withMVar
+                                                )
+import           Control.Monad                  ( when )
 import           Data.Data                      ( Data )
 import           Data.Text                      ( Text, pack)
 import           Data.Text.IO                   ( hPutStrLn )
-import           Data.Time.Clock
+import           Data.Time.Clock                ( getCurrentTime )
 import qualified System.IO
 
 data Priority

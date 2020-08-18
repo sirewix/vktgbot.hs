@@ -6,9 +6,14 @@ module Storage
 where
 
 
-import           Control.Concurrent
-import           Data.Hashable
-import           Data.Maybe
+import           Control.Concurrent             ( MVar
+                                                , newMVar
+                                                , putMVar
+                                                , readMVar
+                                                , takeMVar
+                                                )
+import           Data.Hashable                  ( Hashable )
+import           Data.Maybe                     ( fromMaybe )
 import qualified Data.HashMap.Strict           as Map
 
 type Storage sesid state = MVar (Map.HashMap sesid state)

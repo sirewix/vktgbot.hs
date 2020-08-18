@@ -10,35 +10,47 @@ module Telegram
   )
 where
 
-import           Control.Concurrent
-import           Control.Exception
-import           Data.Aeson                     ( (.=) )
-import           Data.Functor
-import           Data.Maybe
+import           Control.Concurrent             ( newMVar
+                                                , modifyMVar
+                                                )
+import           Control.Exception              ( IOException
+                                                , catch
+                                                )
+import           Data.Aeson                     ( (.=)
+                                                , (.:)
+                                                )
+import           Data.Functor                   ( (<&>) )
+import           Data.Maybe                     ( fromMaybe
+                                                , mapMaybe
+                                                )
 import           Data.Text                      ( Text
                                                 , unpack
                                                 )
 import           Data.Text.Lazy                 ( toStrict )
-import           Logger
-import           Misc
-import           Network.HTTP.Client
-import           Result
-import           Telegram.Result
+import           Logger                         ( Logger
+                                                , Priority(..)
+                                                )
+import           Result                         ( Result(..)
+                                                , resToM
+                                                , eitherToRes
+                                                )
+import           Text.Read                      ( readMaybe )
 import qualified Bot
 import qualified Data.Aeson                    as A
-import qualified Data.Text.Lazy.Encoding       as LE
+import qualified Data.Aeson.Types              as A
+import qualified Data.Text.Lazy.Encoding       as E
+import qualified Network.HTTP.Client           as HTTP
 import qualified Telegram.Chat                 as Chat
 import qualified Telegram.Message              as Message
 import qualified Telegram.Update               as Update
 import qualified Telegram.User                 as User
 
-withHandle :: Text -> Logger -> Manager -> (Bot.Bot (Int, Int) -> IO ()) -> IO ()
+withHandle :: Text -> Logger -> HTTP.Manager -> (Bot.Bot (Int, Int) -> IO ()) -> IO ()
 withHandle token log mgr f = do
   let file = "/tmp/tgbotupd"
   contents <- readFile file `catch` \(_ :: IOException) -> return ""
-  let offset = fromMaybe 0 (readT contents) :: Int
+  let offset = fromMaybe 0 (readMaybe contents) :: Int
   upd_offset <- newMVar offset
-  -- print ("read offset from file = " ++ show offset)
   seq (length contents) $ f $ Bot.Bot
     { Bot.apiSendMessage = \(chat_id, _) -> sendMessage tgpre chat_id
     , Bot.apiGetMessages = getMessages tgpre upd_offset file
@@ -47,19 +59,18 @@ withHandle token log mgr f = do
   tgpre :: (A.FromJSON c) => Text -> A.Value -> IO c
   tgpre = runTg log mgr token
 
--- runTg :: (A.FromJSON a) => Logger -> Manager -> String -> p -> Text -> A.Value -> IO a
 runTg log mgr token method body = do
   request <-
-    parseRequest . unpack $ "https://api.telegram.org/bot" <> token <> "/" <> method
+    HTTP.parseRequest . unpack $ "https://api.telegram.org/bot" <> token <> "/" <> method
   let req = request
-        { method         = "POST"
-        , requestBody    = RequestBodyLBS $ A.encode body
-        , requestHeaders = [("Content-Type", "application/json; charset=utf-8")]
+        { HTTP.method         = "POST"
+        , HTTP.requestBody    = HTTP.RequestBodyLBS $ A.encode body
+        , HTTP.requestHeaders = [("Content-Type", "application/json; charset=utf-8")]
         }
-  res <- httpLbs req mgr
-  let resbody = responseBody res
-  _ <- log Debug $ "recieved " <> (toStrict . LE.decodeUtf8 $ A.encode body)
-  resToM $ maybe (Err "Decoding error") parseTgResult (A.decode resbody)
+  res <- HTTP.httpLbs req mgr
+  let resbody = HTTP.responseBody res
+  _ <- log Debug $ "recieved " <> (toStrict . E.decodeUtf8 $ A.encode body)
+  resToM $ maybe (Err "Decoding error") parseResult (A.decode resbody)
 
 getMessages tgpre upd_offset file = do
   modifyMVar upd_offset $ \upd_offset -> do
@@ -96,3 +107,16 @@ sendMessage tgpre chatId text btns = do
 
 button :: Bot.Button -> A.Value
 button b = A.object ["text" .= b]
+
+parseResult :: (A.FromJSON a) => A.Value -> Result.Result a
+parseResult v = eitherToRes =<< (eitherToRes . A.parseEither parser $ v)
+ where
+  parser = A.withObject "" $ \obj -> do
+    ok <- obj .: "ok"
+    if ok
+      then do
+        res <- obj .: "result"
+        return . Right $ res
+      else do
+        err <- obj .: "description"
+        return . Left $ "request failed with " <> err
