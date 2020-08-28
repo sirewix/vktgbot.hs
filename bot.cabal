@@ -31,7 +31,6 @@ library
       Logger
       Misc
       Options
-      Result
       Storage
       Telegram
       Telegram.Chat

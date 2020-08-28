@@ -24,9 +24,6 @@ import           Data.Text                      ( Text
                                                 , unpack
                                                 )
 import           Options                        ( Opt )
-import           Result                         ( Result
-                                                , maybeToRes
-                                                )
 import           Text.Read                      ( readMaybe )
 
 newtype EchoBotState = EchoBotState
@@ -36,19 +33,18 @@ newtype EchoBotState = EchoBotState
 newtype EchoBotOptions = EchoBotOptions
     { helpText :: Text }
 
-mkEchoBotOptions :: [Opt] -> Result EchoBotOptions
+mkEchoBotOptions :: [Opt] -> Either Text EchoBotOptions
 mkEchoBotOptions opts = pure
   $ EchoBotOptions { helpText = maybe helptxt pack $ lookup "helpText" opts }
  where
   helptxt =
     "Hi, this is simple echo bot" <> "/help — this message" <> "/repeat — set repeat"
 
-defState :: [Opt] -> Result EchoBotState
-defState opts = do
-  nrepit <- opt "repeatTimes" 5
-  return $ EchoBotState { nrepeat = nrepit }
+defState :: [Opt] -> Either Text EchoBotState
+defState opts = EchoBotState <$> opt "repeatTimes" 5
  where
-  opt k def = maybeToRes ("Unexpected " <> k) $ maybe (Just def) readMaybe (lookup k opts)
+  opt k def =
+    maybe (Left $ "Unexpected " <> pack k) Right $ maybe (Just def) readMaybe (lookup k opts)
 
 echoBot :: EchoBotOptions -> BotIO EchoBotState ()
 echoBot opts = do

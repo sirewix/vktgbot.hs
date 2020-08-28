@@ -4,17 +4,28 @@
   #-}
 
 module Vk
-    ( withHandle
+    ( newHandle
     ) where
 
+import           Control.Arrow                  ( left )
 import           Control.Concurrent             ( newMVar
-                                                , modifyMVar
+                                                , takeMVar
+                                                , threadDelay
+                                                , putMVar
                                                 )
-import           Control.Monad                  ( (>=>) )
+import           Control.Exception              ( try )
+import           Control.Monad                  ( (>=>)
+                                                , join
+                                                )
+import           Control.Monad.Except           ( ExceptT(..)
+                                                , liftIO
+                                                , liftEither
+                                                )
 import           Data.Aeson                     ( (.:)
                                                 , (.:?)
                                                 , (.=)
                                                 )
+import           Data.ByteString.Lazy           ( ByteString )
 import           Data.Functor                   ( (<&>) )
 import           Data.Int                       ( Int64 )
 import           Data.Maybe                     ( mapMaybe )
@@ -26,11 +37,6 @@ import           Data.Text                      ( Text
 import           Data.Text.Lazy                 ( toStrict )
 import           Logger                         ( Priority(..) )
 import           Misc                           ( (=:) )
-import           Result                         ( Result
-                                                , eitherToRes
-                                                , resToIO
-                                                , resToM
-                                                )
 import           System.Random                  ( randomIO )
 import           Text.Read                      ( readMaybe )
 import           Vk.Update                      ( Update(..) )
@@ -45,20 +51,21 @@ import qualified Vk.Message                    as Message
 
 getLongPollServer _log vkpre group_id = do
   longpoll <- vkpre "groups.getLongPollServer" ["group_id" =: group_id]
-  resToIO . eitherToRes . (`A.parseEither` longpoll) . A.withObject "" $ \obj -> do
+  liftEither . left pack . (`A.parseEither` longpoll) . A.withObject "" $ \obj -> do
     key    <- obj .: "key" :: A.Parser Text -- (string) — ключ;
     server <- obj .: "server" :: A.Parser Text -- (string) — url сервера;
     ts     <- obj .: "ts" :: A.Parser String -- (string) — timestamp.
     return (key, server, ts)
 
-withHandle token group_id log mgr f = do
+newHandle token group_id log mgr = do
   stuff@(_key, server, _ts) <- getServer
-  stuff                     <- newMVar stuff
-  _                         <- log Info $ "recieved a server and a key | " <> server
+  stuff                     <- liftIO $ newMVar stuff
+  _                         <- liftIO $ log Info $ "recieved a server and a key | " <> server
   let vkpoll serv = vkreq serv parseUpdate ""
-  f $ Bot.Bot { Bot.apiSendMessage = sendMessage vkpre log group_id
-              , Bot.apiGetMessages = getMessages vkpoll log stuff getServer
-              }
+  return $ Bot.BotAPI
+      { Bot.apiSendMessage = sendMessage vkpre log group_id
+      , Bot.apiGetMessages = getMessages vkpoll log stuff getServer
+      }
  where
   vkreq     = runVk log mgr token
   vkpre     = vkreq "https://api.vk.com/method/" parseResult
@@ -74,15 +81,19 @@ query pairs = "?" <> intercalate "&" (map f pairs)
 runVk log mgr token server parse method params = do
   let params' = ["access_token" =: token, "v" =: "5.110"]
   request <- HTTP.parseRequest . unpack $ server <> method <> query (params' <> params)
-  _       <- log Debug $ "sending " <> pack (show params)
+  _       <- liftIO $ log Debug $ "sending " <> pack (show params)
   let req = request
-  res <- HTTP.httpLbs req mgr
+  res <-
+    ExceptT
+    $   left (pack . show)
+    <$> (try (HTTP.httpLbs req mgr) :: IO
+            (Either HTTP.HttpException (HTTP.Response ByteString))
+        )
   let resbody = HTTP.responseBody res
+  _ <- liftIO $ log Debug $ "recieved " <> (toStrict . LE.decodeUtf8 $ resbody)
+  liftEither $ maybe (Left "body decoding error") parse (A.decode resbody)
 
-  _ <- log Debug $ "recieved " <> (toStrict . LE.decodeUtf8 $ resbody)
-  resToM $ maybe (error "Decoding error") parse (A.decode resbody)
-
-parseResult v = eitherToRes =<< (eitherToRes . A.parseEither parser $ v)
+parseResult = left pack . join . A.parseEither parser
  where
   parser = A.withObject "" $ \obj -> do
     res <- obj .:? "response"
@@ -99,8 +110,8 @@ data VkPollResult =
   | RenewTs Int
   | PollFail
 
-parseUpdate :: A.Value -> Result VkPollResult
-parseUpdate = eitherToRes . A.parseEither parser
+parseUpdate :: A.Value -> Either Text VkPollResult
+parseUpdate = left pack . A.parseEither parser
  where
   parser = A.withObject "" $ \obj -> do
     failed <- obj .:? "failed" :: A.Parser (Maybe Int)
@@ -117,7 +128,11 @@ parseUpdate = eitherToRes . A.parseEither parser
         updates <- obj .: "updates"
         return $ VkOk ts updates
 
-getMessages vkpoll log stuff getServer = modifyMVar stuff getMessages'
+getMessages vkpoll log stuff getServer = do
+ stuff' <- liftIO $ takeMVar stuff
+ (stuff'', msgs) <- getMessages' stuff'
+ liftIO $ putMVar stuff stuff''
+ return msgs
  where
   getMessages' (key, server, ts) = do
     updates <- vkpoll
@@ -128,11 +143,11 @@ getMessages vkpoll log stuff getServer = modifyMVar stuff getMessages'
       ]
     case updates of
       VkOk new_ts updates -> do
-        _ <- log Debug $ "new ts: " <> pack (show new_ts)
+        _ <- liftIO $ log Debug $ "new ts: " <> pack (show new_ts)
         let msgs = mapMaybe (combMessages >=> toBotMsg) updates
         return ((key, server, new_ts), msgs)
       RenewTs new_ts -> getMessages' (key, server, new_ts)
-      PollFail       -> getServer >>= getMessages'
+      PollFail       -> liftIO (threadDelay 30000000) >> getServer >>= getMessages'
   combMessages UnsupportedUpdate = Nothing
   combMessages (NewMessage msg)  = Just msg
   toBotMsg msg = do
@@ -140,12 +155,12 @@ getMessages vkpoll log stuff getServer = modifyMVar stuff getMessages'
     if T.null txt then Nothing else Just (Message._peer_id msg, txt)
 
 sendMessage vkpre _log group_id peer_id text btns = do
-  r <- randomIO :: IO Int64
+  r <- liftIO randomIO
   let query = mbkeyboard
         [ "group_id" =: group_id
         , "peer_id" =: pack (show peer_id)
         , "message" =: text
-        , "random_id" =: pack (show r)
+        , "random_id" =: pack (show (r :: Int64))
         ]
   _ <- vkpre "messages.send" query
   return ()

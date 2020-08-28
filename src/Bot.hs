@@ -8,7 +8,7 @@
   #-}
 
 module Bot
-  ( Bot(..)
+  ( BotAPI(..)
   , BotIO
   , BotState(..)
   , BotUserInteraction(..)
@@ -18,7 +18,7 @@ module Bot
   , interpret
   , mkBotOptions
   , modifyState
-  , newStorage
+  , newUserData
   , readMessage
   , readState
   , runBot
@@ -32,9 +32,13 @@ import           Control.Concurrent             ( MVar
                                                 , threadDelay
                                                 )
 import           Control.Monad                  ( forever
+                                                , foldM
                                                 , void
                                                 )
 import           Control.Monad.Free             ( Free(..) )
+import           Control.Monad.Except           ( ExceptT
+                                                , liftIO
+                                                )
 import           Data.Foldable                  ( for_ )
 import           Data.Hashable                  ( Hashable )
 import           Data.List                      ( partition )
@@ -47,13 +51,11 @@ import           Logger                         ( Logger
                                                 , newLogger
                                                 )
 import           Misc                           ( int
-                                                , parseToRes
+                                                , loggedExceptT
+                                                , parseEither
                                                 )
 import           Options                        ( Opt
                                                 , lookupMod
-                                                )
-import           Result                         ( Result(..)
-                                                , maybeToRes
                                                 )
 import           Text.Parsec                    ( (<|>)
                                                 , alphaNum
@@ -67,12 +69,12 @@ import           Text.Read                      ( readMaybe )
 import qualified Data.ByteString.Char8         as B
 import qualified Network.HTTP.Client           as HTTP
 import qualified Network.HTTP.Client.TLS       as HTTP
-import qualified Storage
+import qualified UserData
 import qualified System.IO
 
-data Bot sesid = Bot
-    { apiSendMessage :: !(sesid -> Message -> Maybe [Button] -> IO ())
-    , apiGetMessages :: !(IO [(sesid, Message)])
+data BotAPI sesid = BotAPI
+    { apiSendMessage :: !(sesid -> Message -> Maybe [Button] -> ExceptT Text IO ())
+    , apiGetMessages :: !(ExceptT Text IO [(sesid, Message)])
     }
 
 type Message = Text
@@ -113,38 +115,38 @@ instance Functor (BotUserInteraction a) where
   fmap f (ReadState g              ) = ReadState (f . g)
 
 type BotIO a = Free (BotUserInteraction a)
-type Storage sesid a = Storage.Storage sesid (BotState a)
+type UserData sesid a = UserData.UserData sesid (BotState a)
 
-newStorage :: (Eq sesid, Hashable sesid) => IO (Storage sesid a)
-newStorage = Storage.newStorage
+newUserData :: (Eq sesid, Hashable sesid) => IO (UserData sesid a)
+newUserData = UserData.newUserData
 
 interpret
-  :: Bot k -> Logger -> k -> BotIO a () -> BotState a -> Maybe Message -> IO (BotState a)
+  :: BotAPI k -> Logger -> k -> BotIO a () -> BotState a -> Maybe Message -> ExceptT Text IO (BotState a)
 interpret bot log sesid program = interpret'
  where
   interpret' state msg = case action state of
     Free (ReadMessage f) -> do
       case msg of
         Just msg -> do
-          log Debug "ReadMessage"
+          liftIO $ log Debug "ReadMessage"
           interpret' (state { action = f msg }) Nothing
         Nothing -> return state
     Free (SendMessage m btns n) -> do
-      log Debug "SendMessage"
+      liftIO $ log Debug "SendMessage"
       apiSendMessage bot sesid m btns
       let s = state { action = n }
       interpret' s msg
     Free (ModifyState f n) -> do
-      log Debug "ModifyState"
+      liftIO $ log Debug "ModifyState"
       let newState = f (content state)
           s        = BotState { content = newState, action = n }
       interpret' s msg
     Free (ReadState f) -> do
-      log Debug "ReadState"
+      liftIO $ log Debug "ReadState"
       let s = state { action = f (content state) }
       interpret' s msg
     Pure _ -> do
-      log Debug "Pure"
+      liftIO $ log Debug "Pure"
       return $ state { action = program }
 
 groupMsgs :: (Eq sesid) => [(sesid, msg)] -> [(sesid, [msg])]
@@ -159,9 +161,9 @@ data BotOptions = BotOptions
     , managerSettings :: HTTP.ManagerSettings
     }
 
-mkBotOptions :: String -> [Opt] -> Result BotOptions
+mkBotOptions :: String -> [Opt] -> Either Text BotOptions
 mkBotOptions mod opts = do
-  proxy  <- maybe (Ok Nothing) (fmap Just <$> toProxy . pack) (lookupMod mod "proxy" opts)
+  proxy  <- maybe (Right Nothing) (fmap Just <$> toProxy . pack) (lookupMod mod "proxy" opts)
   loglvl <- opt "logLevel" Warning
   delay  <- opt "delay" 3000000
   return BotOptions
@@ -171,10 +173,10 @@ mkBotOptions mod opts = do
     }
  where
   opt k def =
-    maybeToRes ("Unexpected " <> k) $ maybe (Just def) readMaybe (lookupMod mod k opts)
+    maybe (Left $ "Unexpected " <> pack k) Right $ maybe (Just def) readMaybe (lookupMod mod k opts)
 
-toProxy :: Text -> Result HTTP.Proxy
-toProxy = parseToRes "proxy" $ do
+toProxy :: Text -> Either Text HTTP.Proxy
+toProxy = parseEither "proxy" $ do
   spaces
   host <- many1 $ alphaNum <|> oneOf "_."
   _    <- char ':'
@@ -189,33 +191,34 @@ runBot
   -> s
   -> MVar System.IO.Handle
   -> Text
-  -> (Logger -> HTTP.Manager -> (Bot k -> IO ()) -> IO ())
+  -> (Logger -> HTTP.Manager -> ExceptT Text IO (BotAPI k))
   -> BotOptions
   -> IO ()
-runBot program defState logOutput prefix withHandle options = do
+runBot program defState logOutput prefix newHandle options = do
   mgr <- HTTP.newManager (managerSettings options)
-  db  <- Bot.newStorage
-  let log = sublog prefix $ newLogger logOutput (logLevel options)
-  withHandle log mgr $ \bot -> do
-    log Info "starting bot"
-    void . forever $ do
-      threadDelay (updateDelay options)
-      forkIO $ do
-        log Debug "recieving updates"
-        msgs <- apiGetMessages bot
-        let len = length msgs
-        log Info $ if len > 0
-          then "got "
-            <> (pack . show $ len)
-            <> " new message"
-            <> (if len == 1 then "" else "s")
-          else "no new messages"
-        for_ (groupMsgs msgs) $ void . forkIO . \(someid, msgs) ->
-          Storage.updateStorage (defBotState program defState) db someid $ \state -> foldl
-            (\state msg -> do
-              log Debug ("processing message \"" <> msg <> "\"")
-              state <- state
-              interpret bot log someid program state (Just msg)
-            )
-            (pure state)
-            msgs
+  db  <- Bot.newUserData
+  log Info "starting bot"
+  loggedExceptT log $ do
+    bot <- newHandle log mgr
+    liftIO $ void . forever . loggedExceptT log $ do
+      liftIO $ log Debug "recieving updates"
+      msgs <- apiGetMessages bot
+      let len = length msgs
+      liftIO $ log Info $ if len > 0
+        then "got "
+          <> (pack . show $ len)
+          <> " new message"
+          <> (if len == 1 then "" else "s")
+        else "no new messages"
+      liftIO $ for_ (groupMsgs msgs) $ void . forkIO . processMessages log bot db program defState
+      liftIO $ threadDelay (updateDelay options)
+  where log = sublog prefix $ newLogger logOutput (logLevel options)
+
+processMessages log bot db program defState (someid, msgs) = loggedExceptT log $
+  UserData.updateUserData (defBotState program defState) db someid $ \state -> foldM
+    (\state msg -> do
+      liftIO $ log Debug ("processing message \"" <> msg <> "\"")
+      interpret bot log someid program state (Just msg)
+    )
+    state
+    msgs

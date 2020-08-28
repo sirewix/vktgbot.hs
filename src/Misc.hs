@@ -1,12 +1,20 @@
 {-# LANGUAGE FlexibleContexts #-}
 module Misc
-  ( int
-  , parseToRes
-  , (=:)
+  ( (=:)
+  , int
+  , loggedExceptT
+  , parseEither
   )
 where
 
-import           Result                         ( Result(..) )
+import           Control.Monad.Except           ( ExceptT
+                                                , runExceptT
+                                                , (<=<)
+                                                )
+import           Data.Text                      ( Text, pack )
+import           Logger                         ( Logger
+                                                , Priority(..)
+                                                )
 import           Text.Parsec                    ( many1
                                                 , digit
                                                 , parse
@@ -20,19 +28,22 @@ import           Text.Parsec.Text               ( Parser )
 int :: Parser Int
 int = read <$> many1 digit
 
+-- custom error printer to avoid printing lines,
+-- constant strings were copied from parsec source code
 showShort :: ParseError -> String
-showShort err = -- copied from parsec source code
-                showErrorMessages "or"
+showShort err = showErrorMessages "or"
                                   "unknown parse error"
                                   "expecting"
                                   "unexpected"
                                   "end of input"
                                   (errorMessages err)
 
-parseToRes what parser =
-  either (Err . (("Error parsing " <> what <> ": ") <>) . showShort) Ok
+parseEither what parser =
+  either (Left . pack . (("Error parsing " <> what <> ": ") <>) . showShort) Right
     . parse parser ""
 
 (=:) :: a -> b -> (a, b)
 a =: b = (a, b)
 
+loggedExceptT :: Logger -> ExceptT Text IO () -> IO ()
+loggedExceptT log = either (log Error) pure <=< runExceptT

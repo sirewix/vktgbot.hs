@@ -6,15 +6,23 @@
  #-}
 
 module Telegram
-  ( withHandle
+  ( newHandle
   )
 where
 
+import           Control.Arrow                  ( left )
 import           Control.Concurrent             ( newMVar
-                                                , modifyMVar
+                                                , putMVar
+                                                , takeMVar
                                                 )
 import           Control.Exception              ( IOException
                                                 , catch
+                                                , try
+                                                )
+import           Control.Monad                  ( join )
+import           Control.Monad.Except           ( ExceptT(..)
+                                                , liftEither
+                                                , liftIO
                                                 )
 import           Data.Aeson                     ( (.=)
                                                 , (.:)
@@ -24,15 +32,13 @@ import           Data.Maybe                     ( fromMaybe
                                                 , mapMaybe
                                                 )
 import           Data.Text                      ( Text
+                                                , pack
                                                 , unpack
                                                 )
 import           Data.Text.Lazy                 ( toStrict )
+import           Data.ByteString.Lazy           ( ByteString )
 import           Logger                         ( Logger
                                                 , Priority(..)
-                                                )
-import           Result                         ( Result(..)
-                                                , resToM
-                                                , eitherToRes
                                                 )
 import           Text.Read                      ( readMaybe )
 import qualified Bot
@@ -45,18 +51,18 @@ import qualified Telegram.Message              as Message
 import qualified Telegram.Update               as Update
 import qualified Telegram.User                 as User
 
-withHandle :: Text -> Logger -> HTTP.Manager -> (Bot.Bot (Int, Int) -> IO ()) -> IO ()
-withHandle token log mgr f = do
+newHandle :: Text -> Logger -> HTTP.Manager -> ExceptT Text IO (Bot.BotAPI (Int, Int))
+newHandle token log mgr = liftIO $ do
   let file = "/tmp/tgbotupd"
   contents <- readFile file `catch` \(_ :: IOException) -> return ""
   let offset = fromMaybe 0 (readMaybe contents) :: Int
   upd_offset <- newMVar offset
-  seq (length contents) $ f $ Bot.Bot
+  return $ Bot.BotAPI
     { Bot.apiSendMessage = \(chat_id, _) -> sendMessage tgpre chat_id
     , Bot.apiGetMessages = getMessages tgpre upd_offset file
     }
  where
-  tgpre :: (A.FromJSON c) => Text -> A.Value -> IO c
+  tgpre :: (A.FromJSON c) => Text -> A.Value -> ExceptT Text IO c
   tgpre = runTg log mgr token
 
 runTg log mgr token method body = do
@@ -67,19 +73,25 @@ runTg log mgr token method body = do
         , HTTP.requestBody    = HTTP.RequestBodyLBS $ A.encode body
         , HTTP.requestHeaders = [("Content-Type", "application/json; charset=utf-8")]
         }
-  res <- HTTP.httpLbs req mgr
+  res <-
+    ExceptT
+    $   left (pack . show)
+    <$> (try (HTTP.httpLbs req mgr) :: IO
+            (Either HTTP.HttpException (HTTP.Response ByteString))
+        )
   let resbody = HTTP.responseBody res
-  _ <- log Debug $ "recieved " <> (toStrict . E.decodeUtf8 $ A.encode body)
-  resToM $ maybe (Err "Decoding error") parseResult (A.decode resbody)
+  _ <- liftIO $ log Debug $ "recieved " <> (toStrict . E.decodeUtf8 $ A.encode body)
+  liftEither $ maybe (Left "body decoding error") parseResult (A.decode resbody)
 
 getMessages tgpre upd_offset file = do
-  modifyMVar upd_offset $ \upd_offset -> do
-    updates <- tgpre "getUpdates" $ A.object ["offset" .= upd_offset]
-    let msgs = mapMaybe uniqueMsg . startFrom upd_offset $ updates
-        new_offset =
-          if null updates then upd_offset else Update._update_id . last $ updates
-    writeFile file (show new_offset)
-    return (new_offset, msgs)
+  offset <- liftIO $ takeMVar upd_offset
+  updates <- tgpre "getUpdates" $ A.object ["offset" .= offset]
+  let msgs = mapMaybe uniqueMsg . startFrom offset $ updates
+      new_offset =
+        if null updates then offset else Update._update_id . last $ updates
+  liftIO $ writeFile file (show new_offset)
+  liftIO $ putMVar upd_offset new_offset
+  return msgs
 
 -- messages to Text, skip if has no text
 uniqueMsg upd = do
@@ -92,7 +104,7 @@ startFrom offset upds@(u : rest) | Update._update_id u <= offset = startFrom off
 startFrom _ [] = []
 
 sendMessage tgpre chatId text btns = do
-  _ <- tgpre "sendMessage" body :: IO Message.Json
+  _ <- tgpre "sendMessage" body :: ExceptT Text IO Message.Json
   return ()
  where
   body = A.object $ conss
@@ -108,8 +120,8 @@ sendMessage tgpre chatId text btns = do
 button :: Bot.Button -> A.Value
 button b = A.object ["text" .= b]
 
-parseResult :: (A.FromJSON a) => A.Value -> Result.Result a
-parseResult v = eitherToRes =<< (eitherToRes . A.parseEither parser $ v)
+parseResult :: (A.FromJSON a) => A.Value -> Either Text a
+parseResult v = left pack . join $ A.parseEither parser v
  where
   parser = A.withObject "" $ \obj -> do
     ok <- obj .: "ok"

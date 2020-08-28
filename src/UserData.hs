@@ -1,10 +1,9 @@
-module Storage
-  ( newStorage
-  , updateStorage
-  , Storage
+module UserData
+  ( newUserData
+  , updateUserData
+  , UserData
   )
 where
-
 
 import           Control.Concurrent             ( MVar
                                                 , newMVar
@@ -12,26 +11,27 @@ import           Control.Concurrent             ( MVar
                                                 , readMVar
                                                 , takeMVar
                                                 )
+import           Control.Monad.Except           ( ExceptT, liftIO )
 import           Data.Hashable                  ( Hashable )
 import           Data.Maybe                     ( fromMaybe )
 import qualified Data.HashMap.Strict           as Map
 
-type Storage sesid state = MVar (Map.HashMap sesid state)
+type UserData sesid state = MVar (Map.HashMap sesid state)
 
-newStorage :: (Eq sesid, Hashable sesid) => IO (Storage sesid state)
-newStorage = newMVar Map.empty
+newUserData :: (Eq sesid, Hashable sesid) => IO (UserData sesid state)
+newUserData = newMVar Map.empty
 
-updateStorage
+updateUserData
   :: (Eq sesid, Hashable sesid)
   => state
-  -> Storage sesid state
+  -> UserData sesid state
   -> sesid
-  -> (state -> IO state)
-  -> IO ()
-updateStorage defState db sesid f = do
-  all <- readMVar db
+  -> (state -> ExceptT e IO state)
+  -> ExceptT e IO ()
+updateUserData defState db sesid f = do
+  all <- liftIO $ readMVar db
   let state = fromMaybe defState $ Map.lookup sesid all
   newState <- f state
-  all      <- takeMVar db
-  putMVar db $ Map.insert sesid newState all
+  all      <- liftIO $ takeMVar db
+  liftIO $ putMVar db $ Map.insert sesid newState all
 

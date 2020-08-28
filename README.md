@@ -54,7 +54,6 @@ Per API options can be used with `tg.` or `vk.` prefix. If used as is the option
 | [Logger](src/Logger.hs)                     | Logger definition and implementation                                      |
 | [Misc](src/Misc.hs)                         | Miscellaneous functions                                                   |
 | [Options](src/Options.hs)                   | Reading options from CLI arguments, environment variables and config file |
-| [Result](src/Result.hs)                     | Custom generic result type                                                |
 | [Deserialization](src/Deserialization.hs)   | Common JSON deserialization options                                       |
 | [Storage](src/Storage.hs)                   | Storing clients data in RAM                                               |
 | [Telegram](src/Telegram.hs)                 | Telegram API interface of a bot                                           |

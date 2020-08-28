@@ -13,12 +13,18 @@ module Options
   )
 where
 
-import           Control.Monad                  ( void )
+import           Control.Arrow                  ( left )
+import           Control.Monad.Except           ( ExceptT(..)
+                                                , liftIO
+                                                , liftEither
+                                                , void
+                                                )
 import           Data.List                      ( isPrefixOf )
 import           Data.Maybe                     ( catMaybes )
-import           Result                         ( Result
-                                                , resToIO
+import           Data.Text                      ( Text
+                                                , pack
                                                 )
+import           Misc                           ( parseEither )
 import           System.Environment             ( getArgs
                                                 , getEnvironment
                                                 )
@@ -41,22 +47,23 @@ import           Text.Parsec                    ( (<|>)
                                                 , string
                                                 , try
                                                 )
-import           Text.Parsec.Text               ( parseFromFile )
 import qualified Control.Applicative           as A
+import qualified Control.Exception             as E
+import qualified Data.Text.IO                  as TIO
 
-getOptions :: IO [Opt]
-getOptions = do -- IO
-  args     <- getArgs
-  env      <- getEnvOpts
-  cliArgs  <- resToIO $ parseArgs args
+getOptions :: ExceptT Text IO [Opt]
+getOptions = do
+  args     <- liftIO getArgs
+  env      <- liftIO getEnvOpts
+  cliArgs  <- liftEither $ parseArgs args
   fromConf <- maybe (pure []) fromConfig $ lookup "config" cliArgs
   return (cliArgs ++ env ++ fromConf)
 
-fromConfig :: FilePath -> IO [Opt]
-fromConfig filename = catMaybes . to_io <$> parseFromFile config filename
+fromConfig :: FilePath -> ExceptT Text IO [Opt]
+fromConfig filename = do
+    cs <- ExceptT $ left (pack . show) <$> (E.try (TIO.readFile filename) :: IO (Either E.IOException Text))
+    liftEither $ parseEither "config" config cs
  where
-  to_io (Right a) = a
-  to_io (Left  e) = error ("Config parsing error: " ++ show e)
   eol  = void endOfLine
   eolf = eol <|> eof
   til x = anyChar `manyTill` (try . lookAhead $ x)
@@ -93,9 +100,9 @@ fromConfig filename = catMaybes . to_io <$> parseFromFile config filename
   config = do
     res <- flip sepBy endOfLine $ comment <|> definition <|> (spaces >> return Nothing)
     eof
-    return res
+    return (catMaybes res)
 
-parseArgs :: [String] -> Result [Opt]
+parseArgs :: [String] -> Either Text [Opt]
 parseArgs args = sequence $ f args
  where
   f (('-' : '-' : arg) : val : rest) = return (arg, val) : f rest
@@ -105,9 +112,7 @@ parseArgs args = sequence $ f args
   f []        = []
 
 getEnvOpts :: IO [Opt]
-getEnvOpts = do
-  env <- getEnvironment
-  return (map toOpt . filter f $ env)
+getEnvOpts = map toOpt . filter f <$> getEnvironment
  where
   f (key, _) = prefix `isPrefixOf` key
   prefix = "BOT_"
