@@ -4,9 +4,12 @@
   #-}
 
 module Vk
-    ( newHandle
+    ( newAPI
     ) where
 
+import           BotAPI                         ( BotAPI(..)
+                                                , Button
+                                                )
 import           Control.Arrow                  ( left )
 import           Control.Concurrent             ( newMVar
                                                 , takeMVar
@@ -40,7 +43,6 @@ import           Misc                           ( (=:) )
 import           System.Random                  ( randomIO )
 import           Text.Read                      ( readMaybe )
 import           Vk.Update                      ( Update(..) )
-import qualified Bot
 import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Types              as A
 import qualified Data.Text                     as T
@@ -52,19 +54,19 @@ import qualified Vk.Message                    as Message
 getLongPollServer _log vkpre group_id = do
   longpoll <- vkpre "groups.getLongPollServer" ["group_id" =: group_id]
   liftEither . left pack . (`A.parseEither` longpoll) . A.withObject "" $ \obj -> do
-    key    <- obj .: "key" :: A.Parser Text -- (string) — ключ;
-    server <- obj .: "server" :: A.Parser Text -- (string) — url сервера;
-    ts     <- obj .: "ts" :: A.Parser String -- (string) — timestamp.
+    key    <- obj .: "key" :: A.Parser Text
+    server <- obj .: "server" :: A.Parser Text
+    ts     <- obj .: "ts" :: A.Parser String -- timestamp
     return (key, server, ts)
 
-newHandle token group_id log mgr = do
+newAPI token group_id log mgr = do
   stuff@(_key, server, _ts) <- getServer
   stuff                     <- liftIO $ newMVar stuff
   _                         <- liftIO $ log Info $ "recieved a server and a key | " <> server
   let vkpoll serv = vkreq serv parseUpdate ""
-  return $ Bot.BotAPI
-      { Bot.apiSendMessage = sendMessage vkpre log group_id
-      , Bot.apiGetMessages = getMessages vkpoll log stuff getServer
+  return $ BotAPI
+      { apiSendMessage = sendMessage vkpre log group_id
+      , apiGetMessages = getMessages vkpoll log stuff getServer
       }
  where
   vkreq     = runVk log mgr token
@@ -170,7 +172,7 @@ sendMessage vkpre _log group_id peer_id text btns = do
   keyboard = btns <&> \btns ->
     A.object ["one_time" .= True, "inline" .= False, "buttons" .= [map button btns]]
 
-button :: Bot.Button -> A.Value
+button :: Button -> A.Value
 button b = A.object
   [ "action" .= A.object ["type" .= ("text" :: Text), "label" .= b]
   , "color" .= ("secondary" :: Text)

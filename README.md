@@ -49,18 +49,20 @@ Per API options can be used with `tg.` or `vk.` prefix. If used as is the option
 ## Project structure
 | Module                                      | Description                                                               |
 |---------------------------------------------|---------------------------------------------------------------------------|
-| [Bot](src/Bot.hs)                           | Interface of a bot                                                        |
-| [EchoBot](src/EchoBot.hs)                   | Implementation of echo bot logic                                          |
+| [Bot](src/Bot.hs)                           | Bot *engine*                                                              |
+| [BotAPI](src/BotAPI.hs)                     | Interface of a bot API                                                    |
+| [BotIO](src/BotIO.hs)                       | Interface of a bot logic                                                  |
+| [EchoBot](src/EchoBot.hs)                   | Implementation of the echo bot logic                                      |
 | [Logger](src/Logger.hs)                     | Logger definition and implementation                                      |
 | [Misc](src/Misc.hs)                         | Miscellaneous functions                                                   |
 | [Options](src/Options.hs)                   | Reading options from CLI arguments, environment variables and config file |
 | [Deserialization](src/Deserialization.hs)   | Common JSON deserialization options                                       |
-| [Storage](src/Storage.hs)                   | Storing clients data in RAM                                               |
-| [Telegram](src/Telegram.hs)                 | Telegram API interface of a bot                                           |
+| [UserData](src/UserData.hs)                 | Storing clients data in RAM                                               |
+| [Telegram](src/Telegram.hs)                 | Telegram bot API definition                                               |
 | [Telegram.Chat](src/Telegram/Chat.hs)       | Telegram chat object                                                      |
 | [Telegram.Message](src/Telegram/Message.hs) | Telegram message object                                                   |
 | [Telegram.Update](src/Telegram/Update.hs)   | Telegram update object                                                    |
 | [Telegram.User](src/Telegram/User.hs)       | Telegram user object                                                      |
-| [Vk](src/Vk.hs)                             | Vkontakte API interface of a bot                                          |
+| [Vk](src/Vk.hs)                             | Vkontakte bot API definition                                              |
 | [Vk.Message](src/Vk/Message.hs)             | Vkontakte message object                                                  |
 | [Vk.Update](src/Vk/Update.hs)               | Vkontakte update object                                                   |

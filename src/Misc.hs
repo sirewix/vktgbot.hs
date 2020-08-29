@@ -28,7 +28,7 @@ import           Text.Parsec.Text               ( Parser )
 int :: Parser Int
 int = read <$> many1 digit
 
--- custom error printer to avoid printing lines,
+-- custom error printer to avoid printing line number,
 -- constant strings were copied from parsec source code
 showShort :: ParseError -> String
 showShort err = showErrorMessages "or"

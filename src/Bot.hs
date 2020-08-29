@@ -8,22 +8,11 @@
   #-}
 
 module Bot
-  ( BotAPI(..)
-  , BotIO
-  , BotState(..)
-  , BotUserInteraction(..)
-  , Button
-  , Message
-  , groupMsgs
+  ( groupMsgs
   , interpret
   , mkBotOptions
-  , modifyState
   , newUserData
-  , readMessage
-  , readState
   , runBot
-  , sendMessage
-  , sendWithKeyboard
   )
 where
 
@@ -69,56 +58,16 @@ import           Text.Read                      ( readMaybe )
 import qualified Data.ByteString.Char8         as B
 import qualified Network.HTTP.Client           as HTTP
 import qualified Network.HTTP.Client.TLS       as HTTP
-import qualified UserData
+import           UserData                       ( newUserData
+                                                , updateUserData
+                                                )
 import qualified System.IO
-
-data BotAPI sesid = BotAPI
-    { apiSendMessage :: !(sesid -> Message -> Maybe [Button] -> ExceptT Text IO ())
-    , apiGetMessages :: !(ExceptT Text IO [(sesid, Message)])
-    }
-
-type Message = Text
-type Button = Text
-
-data BotState a = BotState
-    { content :: a
-    , action :: BotIO a ()
-    }
-
-defBotState program def_substate = BotState { content = def_substate, action = program }
-
-data BotUserInteraction a next =
-    ReadMessage (Message -> next)
-  | SendMessage Text (Maybe [Button]) next
-  | ModifyState (a -> a) next
-  | ReadState (a -> next)
-
-readMessage :: BotIO s Message
-readMessage = Free (ReadMessage Pure)
-
-sendMessage :: Text -> BotIO s ()
-sendMessage str = Free (SendMessage str Nothing (Pure ()))
-
-sendWithKeyboard :: Text -> [Button] -> BotIO s ()
-sendWithKeyboard str btns = Free (SendMessage str (Just btns) (Pure ()))
-
-modifyState :: (s -> s) -> BotIO s ()
-modifyState f = Free (ModifyState f (Pure ()))
-
-readState :: BotIO s s
-readState = Free (ReadState Pure)
-
-instance Functor (BotUserInteraction a) where
-  fmap f (ReadMessage g            ) = ReadMessage (f . g)
-  fmap f (SendMessage str btns next) = SendMessage str btns (f next)
-  fmap f (ModifyState g next       ) = ModifyState g (f next)
-  fmap f (ReadState g              ) = ReadState (f . g)
-
-type BotIO a = Free (BotUserInteraction a)
-type UserData sesid a = UserData.UserData sesid (BotState a)
-
-newUserData :: (Eq sesid, Hashable sesid) => IO (UserData sesid a)
-newUserData = UserData.newUserData
+import           BotAPI                         ( BotAPI(..) )
+import           BotIO                          ( BotIO
+                                                , BotState(..)
+                                                , BotUserInteraction(..)
+                                                , Message
+                                                )
 
 interpret
   :: BotAPI k -> Logger -> k -> BotIO a () -> BotState a -> Maybe Message -> ExceptT Text IO (BotState a)
@@ -154,7 +103,6 @@ groupMsgs ((sesid, msg) : rest) = (sesid, msg : map snd this) : groupMsgs notthi
   where (this, notthis) = partition ((==) sesid . fst) rest
 groupMsgs [] = []
 
-
 data BotOptions = BotOptions
     { logLevel :: Priority
     , updateDelay :: Int
@@ -173,7 +121,7 @@ mkBotOptions mod opts = do
     }
  where
   opt k def =
-    maybe (Left $ "Unexpected " <> pack k) Right $ maybe (Just def) readMaybe (lookupMod mod k opts)
+    maybe (Left $ "Bad parameter " <> pack k) Right $ maybe (Just def) readMaybe (lookupMod mod k opts)
 
 toProxy :: Text -> Either Text HTTP.Proxy
 toProxy = parseEither "proxy" $ do
@@ -194,12 +142,12 @@ runBot
   -> (Logger -> HTTP.Manager -> ExceptT Text IO (BotAPI k))
   -> BotOptions
   -> IO ()
-runBot program defState logOutput prefix newHandle options = do
+runBot program defState logOutput prefix newAPI options = do
   mgr <- HTTP.newManager (managerSettings options)
-  db  <- Bot.newUserData
+  db  <- newUserData
   log Info "starting bot"
   loggedExceptT log $ do
-    bot <- newHandle log mgr
+    bot <- newAPI log mgr
     liftIO $ void . forever . loggedExceptT log $ do
       liftIO $ log Debug "recieving updates"
       msgs <- apiGetMessages bot
@@ -215,10 +163,11 @@ runBot program defState logOutput prefix newHandle options = do
   where log = sublog prefix $ newLogger logOutput (logLevel options)
 
 processMessages log bot db program defState (someid, msgs) = loggedExceptT log $
-  UserData.updateUserData (defBotState program defState) db someid $ \state -> foldM
+  updateUserData defBotState db someid $ \state -> foldM
     (\state msg -> do
       liftIO $ log Debug ("processing message \"" <> msg <> "\"")
       interpret bot log someid program state (Just msg)
     )
     state
     msgs
+  where defBotState = BotState { content = defState, action = program }

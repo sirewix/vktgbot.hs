@@ -53,7 +53,7 @@ main = do
                      defState'
                      logOutput
                      "Telegram: "
-                     (Telegram.newHandle (pack token))
+                     (Telegram.newAPI (pack token))
                      tgopts
             Nothing -> log Warning "Telegram token was not found, skipping"
 
@@ -63,7 +63,7 @@ main = do
                      defState'
                      logOutput
                      "Vk: "
-                     (Vk.newHandle (pack token) (pack group_id))
+                     (Vk.newAPI (pack token) (pack group_id))
                      vkopts
             (_, _) -> log Warning "Vkontakte group id or token was not found, skipping"
 

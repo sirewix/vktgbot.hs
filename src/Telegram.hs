@@ -6,10 +6,13 @@
  #-}
 
 module Telegram
-  ( newHandle
+  ( newAPI
   )
 where
 
+import           BotAPI                         ( BotAPI(..)
+                                                , Button
+                                                )
 import           Control.Arrow                  ( left )
 import           Control.Concurrent             ( newMVar
                                                 , putMVar
@@ -41,7 +44,6 @@ import           Logger                         ( Logger
                                                 , Priority(..)
                                                 )
 import           Text.Read                      ( readMaybe )
-import qualified Bot
 import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Types              as A
 import qualified Data.Text.Lazy.Encoding       as E
@@ -50,16 +52,17 @@ import qualified Telegram.Chat                 as Chat
 import qualified Telegram.Message              as Message
 import qualified Telegram.Update               as Update
 import qualified Telegram.User                 as User
+import qualified BotAPI
 
-newHandle :: Text -> Logger -> HTTP.Manager -> ExceptT Text IO (Bot.BotAPI (Int, Int))
-newHandle token log mgr = liftIO $ do
+newAPI :: Text -> Logger -> HTTP.Manager -> ExceptT Text IO (BotAPI (Int, Int))
+newAPI token log mgr = liftIO $ do
   let file = "/tmp/tgbotupd"
   contents <- readFile file `catch` \(_ :: IOException) -> return ""
   let offset = fromMaybe 0 (readMaybe contents) :: Int
   upd_offset <- newMVar offset
-  return $ Bot.BotAPI
-    { Bot.apiSendMessage = \(chat_id, _) -> sendMessage tgpre chat_id
-    , Bot.apiGetMessages = getMessages tgpre upd_offset file
+  return $ BotAPI
+    { apiSendMessage = \(chat_id, _) -> sendMessage tgpre chat_id
+    , apiGetMessages = getMessages tgpre upd_offset file
     }
  where
   tgpre :: (A.FromJSON c) => Text -> A.Value -> ExceptT Text IO c
@@ -93,11 +96,13 @@ getMessages tgpre upd_offset file = do
   liftIO $ putMVar upd_offset new_offset
   return msgs
 
--- messages to Text, skip if has no text
+-- update to Message, skip if has no text
+uniqueMsg :: Update.Json -> Maybe ((Int, Int), BotAPI.Message)
 uniqueMsg upd = do
-  msg <- Update._message upd
-  txt <- Message._text msg
-  return ((Chat._id . Message._chat $ msg, User._id . Message._from $ msg), txt)
+  msg  <- Update._message upd
+  txt  <- Message._text msg
+  from <- Message._from msg
+  return ((Chat._id . Message._chat $ msg, User._id from), txt)
 
 startFrom offset upds@(u : rest) | Update._update_id u <= offset = startFrom offset rest
                                  | otherwise                     = upds
@@ -108,16 +113,15 @@ sendMessage tgpre chatId text btns = do
   return ()
  where
   body = A.object $ conss
-    [ "chat_id" .= (chatId :: Int) -- Integer or String -- Unique identifier for the target chat
-                                     -- or username of the target channel (in the format @channelusername)
+    [ "chat_id" .= (chatId :: Int)
     , "text" .= (text :: Text)
-    ] -- String -- Text of the message to be sent, 1-4096 characters after entities parsing
+    ]
   conss    = consMay "reply_markup" keyboard
   keyboard = btns
     <&> \btns -> A.object ["keyboard" .= [map button btns], "resize_keyboard" .= True]
   consMay attr = maybe id ((:) . (attr .=))
 
-button :: Bot.Button -> A.Value
+button :: Button -> A.Value
 button b = A.object ["text" .= b]
 
 parseResult :: (A.FromJSON a) => A.Value -> Either Text a

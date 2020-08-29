@@ -10,7 +10,7 @@ module EchoBot
   )
 where
 
-import           Bot                            ( BotIO
+import           BotIO                          ( BotIO
                                                 , modifyState
                                                 , readMessage
                                                 , readState
@@ -44,7 +44,7 @@ defState :: [Opt] -> Either Text EchoBotState
 defState opts = EchoBotState <$> opt "repeatTimes" 5
  where
   opt k def =
-    maybe (Left $ "Unexpected " <> pack k) Right $ maybe (Just def) readMaybe (lookup k opts)
+    maybe (Left $ "Bad parameter " <> pack k) Right $ maybe (Just def) readMaybe (lookup k opts)
 
 echoBot :: EchoBotOptions -> BotIO EchoBotState ()
 echoBot opts = do

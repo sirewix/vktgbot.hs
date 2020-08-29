@@ -103,11 +103,11 @@ fromConfig filename = do
     return (catMaybes res)
 
 parseArgs :: [String] -> Either Text [Opt]
-parseArgs args = sequence $ f args
+parseArgs = sequence . f
  where
   f (('-' : '-' : arg) : val : rest) = return (arg, val) : f rest
   f (('-' : '-' : arg) : _) =
-    fail ("Flag parameters are not allowed. Use \"" ++ arg ++ " true\" for that")
+    fail ("Flag parameters are not allowed. Use \"--" ++ arg ++ " true\" for that")
   f (val : _) = fail ("Unexpected CLI argument \"" ++ val ++ "\"")
   f []        = []
 

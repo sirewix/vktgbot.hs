@@ -32,6 +32,4 @@ updateUserData defState db sesid f = do
   all <- liftIO $ readMVar db
   let state = fromMaybe defState $ Map.lookup sesid all
   newState <- f state
-  all      <- liftIO $ takeMVar db
-  liftIO $ putMVar db $ Map.insert sesid newState all
-
+  liftIO $ putMVar db . Map.insert sesid newState =<< takeMVar db
