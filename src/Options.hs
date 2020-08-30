@@ -23,6 +23,7 @@ import           Data.List                      ( isPrefixOf )
 import           Data.Maybe                     ( catMaybes )
 import           Data.Text                      ( Text
                                                 , pack
+                                                , unpack
                                                 )
 import           Misc                           ( parseEither )
 import           System.Environment             ( getArgs
@@ -47,17 +48,21 @@ import           Text.Parsec                    ( (<|>)
                                                 , string
                                                 , try
                                                 )
+import           Text.Parsec.Text               ( Parser )
 import qualified Control.Applicative           as A
 import qualified Control.Exception             as E
 import qualified Data.Text.IO                  as TIO
 
+type Opt = (String, Text)
+
+lookupMod mod key opts = lookup (mod <> "." <> key) opts A.<|> lookup key opts
+
 getOptions :: ExceptT Text IO [Opt]
 getOptions = do
-  args     <- liftIO getArgs
-  env      <- liftIO getEnvOpts
-  cliArgs  <- liftEither $ parseArgs args
-  fromConf <- maybe (pure []) fromConfig $ lookup "config" cliArgs
-  return (cliArgs ++ env ++ fromConf)
+  cliArgs  <- liftIO getArgs >>= liftEither . parseArgs
+  envArgs  <- liftIO getEnvOpts
+  fromConf <- maybe (pure []) fromConfig (unpack <$> lookup "config" cliArgs)
+  return (cliArgs ++ envArgs ++ fromConf)
 
 fromConfig :: FilePath -> ExceptT Text IO [Opt]
 fromConfig filename = do
@@ -71,8 +76,8 @@ fromConfig filename = do
     x <- til eolf
     return (unwords . words $ x) -- eeh
 
-  qstring = between (string "\"\n" <|> string "\"") (string "\n\"" <|> string "\"") qchar
-  qchar   = many $ noneOf ['\\', '"'] <|> do
+  qstring = between (string "\"\n" <|> string "\"") (string "\n\"" <|> string "\"") (many qchar)
+  qchar   = noneOf ['\\', '"'] <|> do
     _ <- char '\\'
     c <- oneOf ['\\', '"', 'n']
     return $ case c of
@@ -95,8 +100,9 @@ fromConfig filename = do
     spaces
     val <- qstring <|> sstring
     spaces
-    return $ Just (key, val)
+    return $ Just (key, pack val)
 
+  config :: Parser [Opt]
   config = do
     res <- flip sepBy endOfLine $ comment <|> definition <|> (spaces >> return Nothing)
     eof
@@ -105,7 +111,7 @@ fromConfig filename = do
 parseArgs :: [String] -> Either Text [Opt]
 parseArgs = sequence . f
  where
-  f (('-' : '-' : arg) : val : rest) = return (arg, val) : f rest
+  f (('-' : '-' : arg) : val : rest) = return (arg, pack val) : f rest
   f (('-' : '-' : arg) : _) =
     fail ("Flag parameters are not allowed. Use \"--" ++ arg ++ " true\" for that")
   f (val : _) = fail ("Unexpected CLI argument \"" ++ val ++ "\"")
@@ -116,11 +122,7 @@ getEnvOpts = map toOpt . filter f <$> getEnvironment
  where
   f (key, _) = prefix `isPrefixOf` key
   prefix = "BOT_"
-  toOpt (key, val) = (drop (length prefix) (map fromEnv key), val)
+  toOpt (key, val) = (drop (length prefix) (map fromEnv key), pack val)
   fromEnv '_' = '.'
   fromEnv c   = c
-
-type Opt = (String, String)
-
-lookupMod mod key opts = lookup (mod <> "." <> key) opts A.<|> lookup key opts
 

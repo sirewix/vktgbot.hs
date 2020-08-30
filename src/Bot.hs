@@ -42,6 +42,7 @@ import           Logger                         ( Logger
 import           Misc                           ( int
                                                 , loggedExceptT
                                                 , parseEither
+                                                , readT
                                                 )
 import           Options                        ( Opt
                                                 , lookupMod
@@ -54,7 +55,6 @@ import           Text.Parsec                    ( (<|>)
                                                 , oneOf
                                                 , spaces
                                                 )
-import           Text.Read                      ( readMaybe )
 import qualified Data.ByteString.Char8         as B
 import qualified Network.HTTP.Client           as HTTP
 import qualified Network.HTTP.Client.TLS       as HTTP
@@ -111,7 +111,7 @@ data BotOptions = BotOptions
 
 mkBotOptions :: String -> [Opt] -> Either Text BotOptions
 mkBotOptions mod opts = do
-  proxy  <- maybe (Right Nothing) (fmap Just <$> toProxy . pack) (lookupMod mod "proxy" opts)
+  proxy  <- maybe (Right Nothing) (fmap Just <$> toProxy) (lookupMod mod "proxy" opts)
   loglvl <- opt "logLevel" Warning
   delay  <- opt "delay" 3000000
   return BotOptions
@@ -121,7 +121,7 @@ mkBotOptions mod opts = do
     }
  where
   opt k def =
-    maybe (Left $ "Bad parameter " <> pack k) Right $ maybe (Just def) readMaybe (lookupMod mod k opts)
+    maybe (Left $ "Bad parameter " <> pack k) Right $ maybe (Just def) readT (lookupMod mod k opts)
 
 toProxy :: Text -> Either Text HTTP.Proxy
 toProxy = parseEither "proxy" $ do

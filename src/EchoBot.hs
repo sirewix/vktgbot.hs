@@ -19,9 +19,13 @@ import           BotIO                          ( BotIO
                                                 )
 import           Control.Applicative            ( (<**>) )
 import           Data.Char                      ( isAlphaNum )
+import           Data.Maybe                     ( fromMaybe )
 import           Data.Text                      ( Text
                                                 , pack
                                                 , unpack
+                                                )
+import           Misc                           ( parseEither
+                                                , int
                                                 )
 import           Options                        ( Opt )
 import           Text.Read                      ( readMaybe )
@@ -35,7 +39,7 @@ newtype EchoBotOptions = EchoBotOptions
 
 mkEchoBotOptions :: [Opt] -> Either Text EchoBotOptions
 mkEchoBotOptions opts = pure
-  $ EchoBotOptions { helpText = maybe helptxt pack $ lookup "helpText" opts }
+  $ EchoBotOptions { helpText = fromMaybe helptxt $ lookup "helpText" opts }
  where
   helptxt =
     "Hi, this is simple echo bot" <> "/help — this message" <> "/repeat — set repeat"
@@ -44,7 +48,7 @@ defState :: [Opt] -> Either Text EchoBotState
 defState opts = EchoBotState <$> opt "repeatTimes" 5
  where
   opt k def =
-    maybe (Left $ "Bad parameter " <> pack k) Right $ maybe (Just def) readMaybe (lookup k opts)
+    maybe (Right def) (parseEither ("parameter " <> pack k) int) (lookup k opts)
 
 echoBot :: EchoBotOptions -> BotIO EchoBotState ()
 echoBot opts = do

@@ -21,10 +21,11 @@ import           EchoBot                        ( mkEchoBotOptions
 import           Logger                         ( Priority(..)
                                                 , newLogger
                                                 )
-import           Misc                           ( loggedExceptT )
+import           Misc                           ( loggedExceptT
+                                                , readT
+                                                )
 import           Options                        ( getOptions )
 import           System.IO                      ( stdout )
-import           Text.Read                      ( readMaybe )
 import qualified Telegram
 import qualified Vk
 
@@ -36,7 +37,7 @@ main = do
     options <- getOptions
     loglvl  <- liftEither $ maybe (Left "Can't parse logLevel") Right $ maybe
       (Just Warning)
-      readMaybe
+      readT
       (lookup "logLevel" options)
     let log = newLogger logOutput loglvl
     liftIO . loggedExceptT log $ do
@@ -45,7 +46,7 @@ main = do
       echoopts  <- liftEither $ mkEchoBotOptions options
       defState' <- liftEither $ defState options
       let program = echoBot echoopts
-      liftIO $ log Debug . pack . show $ options
+      liftIO . log Debug . pack . show $ options
 
       let tg = case lookup "tg.token" options of
             Just token -> do
@@ -53,7 +54,7 @@ main = do
                      defState'
                      logOutput
                      "Telegram: "
-                     (Telegram.newAPI (pack token))
+                     (Telegram.newAPI token)
                      tgopts
             Nothing -> log Warning "Telegram token was not found, skipping"
 
@@ -63,7 +64,7 @@ main = do
                      defState'
                      logOutput
                      "Vk: "
-                     (Vk.newAPI (pack token) (pack group_id))
+                     (Vk.newAPI token group_id)
                      vkopts
             (_, _) -> log Warning "Vkontakte group id or token was not found, skipping"
 
