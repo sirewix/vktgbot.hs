@@ -14,7 +14,8 @@ import           Bot.API                        ( BotAPI(..)
                                                 , Button
                                                 )
 import           Control.Arrow                  ( left )
-import           Control.Concurrent             ( newMVar
+import           Control.Concurrent             ( MVar
+                                                , newMVar
                                                 , putMVar
                                                 , takeMVar
                                                 )
@@ -22,7 +23,9 @@ import           Control.Exception              ( IOException
                                                 , catch
                                                 , try
                                                 )
-import           Control.Monad                  ( join )
+import           Control.Monad                  ( join
+                                                , void
+                                                )
 import           Control.Monad.Except           ( ExceptT(..)
                                                 , liftEither
                                                 , liftIO
@@ -65,9 +68,10 @@ newAPI token log mgr = liftIO $ do
     , apiGetMessages = getMessages tgpre upd_offset file
     }
  where
-  tgpre :: (A.FromJSON c) => Text -> A.Value -> ExceptT Text IO c
+  tgpre :: A.FromJSON c => Text -> A.Value -> ExceptT Text IO c
   tgpre = runTg log mgr token
 
+runTg :: A.FromJSON a => Logger -> HTTP.Manager -> Text -> Text -> A.Value -> ExceptT Text IO a
 runTg log mgr token method body = do
   request <-
     HTTP.parseRequest . unpack $ "https://api.telegram.org/bot" <> token <> "/" <> method
@@ -86,6 +90,11 @@ runTg log mgr token method body = do
   _ <- liftIO $ log Debug $ "recieved " <> (toStrict . E.decodeUtf8 $ A.encode body)
   liftEither $ maybe (Left "body decoding error") parseResult (A.decode resbody)
 
+getMessages
+  :: (Text -> A.Value -> ExceptT Text IO [Update.Json])
+  -> MVar Int
+  -> FilePath
+  -> ExceptT Text IO [((Int, Int), Bot.API.Message)]
 getMessages tgpre upd_offset file = do
   offset <- liftIO $ takeMVar upd_offset
   updates <- tgpre "getUpdates" $ A.object ["offset" .= offset]
@@ -104,13 +113,18 @@ uniqueMsg upd = do
   from <- Message._from msg
   return ((Chat._id . Message._chat $ msg, User._id from), txt)
 
+startFrom :: Int -> [Update.Json] -> [Update.Json]
 startFrom offset upds@(u : rest) | Update._update_id u <= offset = startFrom offset rest
                                  | otherwise                     = upds
 startFrom _ [] = []
 
-sendMessage tgpre chatId text btns = do
-  _ <- tgpre "sendMessage" body :: ExceptT Text IO Message.Json
-  return ()
+sendMessage
+  :: (Text -> A.Value -> ExceptT Text IO Message.Json)
+  -> Int
+  -> Text
+  -> Maybe [Button]
+  -> ExceptT Text IO ()
+sendMessage tgpre chatId text btns = void $ tgpre "sendMessage" body
  where
   body = A.object $ conss
     [ "chat_id" .= (chatId :: Int)

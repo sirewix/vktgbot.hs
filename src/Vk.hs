@@ -1,7 +1,4 @@
-{-# LANGUAGE
-    OverloadedStrings
-  , FlexibleContexts
-  #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Vk
     ( newAPI
@@ -10,8 +7,10 @@ module Vk
 import           Bot.API                        ( BotAPI(..)
                                                 , Button
                                                 )
+import           Bot.IO                         ( Message )
 import           Control.Arrow                  ( left )
-import           Control.Concurrent             ( newMVar
+import           Control.Concurrent             ( MVar
+                                                , newMVar
                                                 , takeMVar
                                                 , threadDelay
                                                 , putMVar
@@ -27,6 +26,7 @@ import           Control.Monad.Except           ( ExceptT(..)
 import           Data.Aeson                     ( (.:)
                                                 , (.:?)
                                                 , (.=)
+                                                , FromJSON
                                                 )
 import           Data.ByteString.Lazy           ( ByteString )
 import           Data.Functor                   ( (<&>) )
@@ -38,11 +38,18 @@ import           Data.Text                      ( Text
                                                 , intercalate
                                                 )
 import           Data.Text.Lazy                 ( toStrict )
-import           Logger                         ( Priority(..) )
-import           Misc                           ( (=:) )
+import           Logger                         ( Logger
+                                                , Priority(..)
+                                                )
+import           Misc                           ( (=:)
+                                                , readT
+                                                )
 import           System.Random                  ( randomIO )
-import           Text.Read                      ( readMaybe )
 import           Vk.Update                      ( Update(..) )
+import           Vk.Poll                        ( VkPollResult(..)
+                                                , parseUpdate
+                                                , getLongPollServer
+                                                )
 import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Types              as A
 import qualified Data.Text                     as T
@@ -51,14 +58,7 @@ import qualified Network.HTTP.Client           as HTTP
 import qualified Network.URI.Encode            as URI
 import qualified Vk.Message                    as Message
 
-getLongPollServer _log vkpre group_id = do
-  longpoll <- vkpre "groups.getLongPollServer" ["group_id" =: group_id]
-  liftEither . left pack . (`A.parseEither` longpoll) . A.withObject "" $ \obj -> do
-    key    <- obj .: "key" :: A.Parser Text
-    server <- obj .: "server" :: A.Parser Text
-    ts     <- obj .: "ts" :: A.Parser String -- timestamp
-    return (key, server, ts)
-
+newAPI :: Text -> Text -> Logger -> HTTP.Manager -> ExceptT Text IO (BotAPI Int)
 newAPI token group_id log mgr = do
   stuff@(_key, server, _ts) <- getServer
   stuff                     <- liftIO $ newMVar stuff
@@ -73,13 +73,22 @@ newAPI token group_id log mgr = do
   vkpre     = vkreq "https://api.vk.com/method/" parseResult
   getServer = do
     (key, server, tss) <- getLongPollServer log vkpre group_id
-    let (Just ts) = readMaybe tss :: Maybe Int
+    let (Just ts) = readT tss :: Maybe Int
     return (key, server, ts)
 
 query :: [(Text, Text)] -> Text
 query pairs = "?" <> intercalate "&" (map f pairs)
   where f (k, v) = k <> "=" <> URI.encodeText v
 
+runVk
+  :: Logger
+  -> HTTP.Manager
+  -> Text
+  -> Text
+  -> (A.Value -> Either Text a)
+  -> Text
+  -> [(Text, Text)]
+  -> ExceptT Text IO a
 runVk log mgr token server parse method params = do
   let params' = ["access_token" =: token, "v" =: "5.110"]
   request <- HTTP.parseRequest . unpack $ server <> method <> query (params' <> params)
@@ -95,6 +104,7 @@ runVk log mgr token server parse method params = do
   _ <- liftIO $ log Debug $ "recieved " <> (toStrict . LE.decodeUtf8 $ resbody)
   liftEither $ maybe (Left "body decoding error") parse (A.decode resbody)
 
+parseResult :: FromJSON a => A.Value -> Either Text a
 parseResult = left pack . join . A.parseEither parser
  where
   parser = A.withObject "" $ \obj -> do
@@ -107,29 +117,12 @@ parseResult = left pack . join . A.parseEither parser
         msg  <- err .: "error_msg"
         return . Left $ "request failed with code " <> show code <> ": " <> msg
 
-data VkPollResult =
-    VkOk Int [Update]
-  | RenewTs Int
-  | PollFail
-
-parseUpdate :: A.Value -> Either Text VkPollResult
-parseUpdate = left pack . A.parseEither parser
- where
-  parser = A.withObject "" $ \obj -> do
-    failed <- obj .:? "failed" :: A.Parser (Maybe Int)
-    case failed of
-      Just 1 -> do
-        tss <- obj .: "ts"
-        let (Just ts) = readMaybe tss :: Maybe Int
-        return (RenewTs ts)
-      Just _ -> do
-        return PollFail
-      Nothing -> do
-        tss <- obj .: "ts"
-        let (Just ts) = readMaybe tss :: Maybe Int
-        updates <- obj .: "updates"
-        return $ VkOk ts updates
-
+getMessages
+  :: (Text -> [(Text, Text)] -> ExceptT Text IO VkPollResult)
+  -> Logger
+  -> MVar (Text, Text, Int)
+  -> ExceptT Text IO (Text, Text, Int)
+  -> ExceptT Text IO [(Int, Message)]
 getMessages vkpoll log stuff getServer = do
  stuff' <- liftIO $ takeMVar stuff
  (stuff'', msgs) <- getMessages' stuff'
@@ -156,6 +149,15 @@ getMessages vkpoll log stuff getServer = do
     let txt = Message._text msg
     if T.null txt then Nothing else Just (Message._peer_id msg, txt)
 
+sendMessage
+  :: FromJSON a
+  => (Text -> [(Text, Text)] -> ExceptT Text IO a)
+  -> Logger
+  -> Text
+  -> Int
+  -> Text
+  -> Maybe [Button]
+  -> ExceptT Text IO ()
 sendMessage vkpre _log group_id peer_id text btns = do
   r <- liftIO randomIO
   let query = mbkeyboard

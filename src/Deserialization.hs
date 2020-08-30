@@ -4,14 +4,17 @@ module Deserialization
   )
 where
 
-import           Data.Aeson                     ( defaultOptions
+import           Data.Aeson                     ( Options
+                                                , defaultOptions
                                                 , fieldLabelModifier
                                                 , constructorTagModifier
                                                 )
 import           Data.Char                      ( toLower )
 
-prefix = "_"
+customParseOptions :: Options
 customParseOptions = defaultOptions { fieldLabelModifier = drop (length prefix) }
+    where prefix = "_"
 
+enumParseOptions :: Options
 enumParseOptions =
   defaultOptions { constructorTagModifier = \(x : xs) -> toLower x : xs }

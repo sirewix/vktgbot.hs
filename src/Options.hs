@@ -55,6 +55,7 @@ import qualified Data.Text.IO                  as TIO
 
 type Opt = (String, Text)
 
+lookupMod :: String -> String -> [Opt] -> Maybe Text
 lookupMod mod key opts = lookup (mod <> "." <> key) opts A.<|> lookup key opts
 
 getOptions :: ExceptT Text IO [Opt]

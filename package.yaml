@@ -35,7 +35,6 @@ ghc-options:
 - -Wall
 # Some exceptions:
 - -Wno-name-shadowing # Very useful
-- -Wno-missing-signatures # Types inferring is a feature
 
 library:
   source-dirs: src

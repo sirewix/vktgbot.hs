@@ -10,7 +10,6 @@
 module Bot
   ( groupMsgs
   , interpret
-  , newUserData
   , runBot
   )
 where
@@ -46,14 +45,21 @@ import           Logger                         ( Logger
                                                 , newLogger
                                                 )
 import           Misc                           ( loggedExceptT )
-import           UserData                       ( newUserData
+import           UserData                       ( UserData
+                                                , newUserData
                                                 , updateUserData
                                                 )
 import qualified Network.HTTP.Client           as HTTP
 import qualified System.IO
 
 interpret
-  :: BotAPI k -> Logger -> k -> BotIO a () -> BotState a -> Maybe Message -> ExceptT Text IO (BotState a)
+  :: BotAPI k
+  -> Logger
+  -> k
+  -> BotIO a ()
+  -> BotState a
+  -> Maybe Message
+  -> ExceptT Text IO (BotState a)
 interpret bot log sesid program = interpret'
  where
   interpret' state msg = case action state of
@@ -115,6 +121,15 @@ runBot program defState logOutput prefix newAPI options = do
       liftIO $ threadDelay (updateDelay options)
   where log = sublog prefix $ newLogger logOutput (logLevel options)
 
+processMessages
+  :: (Eq k, Hashable k)
+  => Logger
+  -> BotAPI k
+  -> UserData k (BotState s)
+  -> BotIO s ()
+  -> s
+  -> (k, [Message])
+  -> IO ()
 processMessages log bot db program defState (someid, msgs) = loggedExceptT log $
   updateUserData defBotState db someid $ \state -> foldM
     (\state msg -> do
