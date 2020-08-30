@@ -10,12 +10,18 @@
 module Bot
   ( groupMsgs
   , interpret
-  , mkBotOptions
   , newUserData
   , runBot
   )
 where
 
+import           Bot.API                        ( BotAPI(..) )
+import           Bot.IO                         ( BotIO
+                                                , BotState(..)
+                                                , BotUserInteraction(..)
+                                                , Message
+                                                )
+import           Bot.Options                    ( BotOptions(..) )
 import           Control.Concurrent             ( MVar
                                                 , forkIO
                                                 , threadDelay
@@ -24,10 +30,10 @@ import           Control.Monad                  ( forever
                                                 , foldM
                                                 , void
                                                 )
-import           Control.Monad.Free             ( Free(..) )
 import           Control.Monad.Except           ( ExceptT
                                                 , liftIO
                                                 )
+import           Control.Monad.Free             ( Free(..) )
 import           Data.Foldable                  ( for_ )
 import           Data.Hashable                  ( Hashable )
 import           Data.List                      ( partition )
@@ -39,35 +45,12 @@ import           Logger                         ( Logger
                                                 , sublog
                                                 , newLogger
                                                 )
-import           Misc                           ( int
-                                                , loggedExceptT
-                                                , parseEither
-                                                , readT
-                                                )
-import           Options                        ( Opt
-                                                , lookupMod
-                                                )
-import           Text.Parsec                    ( (<|>)
-                                                , alphaNum
-                                                , char
-                                                , eof
-                                                , many1
-                                                , oneOf
-                                                , spaces
-                                                )
-import qualified Data.ByteString.Char8         as B
-import qualified Network.HTTP.Client           as HTTP
-import qualified Network.HTTP.Client.TLS       as HTTP
+import           Misc                           ( loggedExceptT )
 import           UserData                       ( newUserData
                                                 , updateUserData
                                                 )
+import qualified Network.HTTP.Client           as HTTP
 import qualified System.IO
-import           BotAPI                         ( BotAPI(..) )
-import           BotIO                          ( BotIO
-                                                , BotState(..)
-                                                , BotUserInteraction(..)
-                                                , Message
-                                                )
 
 interpret
   :: BotAPI k -> Logger -> k -> BotIO a () -> BotState a -> Maybe Message -> ExceptT Text IO (BotState a)
@@ -102,36 +85,6 @@ groupMsgs :: (Eq sesid) => [(sesid, msg)] -> [(sesid, [msg])]
 groupMsgs ((sesid, msg) : rest) = (sesid, msg : map snd this) : groupMsgs notthis
   where (this, notthis) = partition ((==) sesid . fst) rest
 groupMsgs [] = []
-
-data BotOptions = BotOptions
-    { logLevel :: Priority
-    , updateDelay :: Int
-    , managerSettings :: HTTP.ManagerSettings
-    }
-
-mkBotOptions :: String -> [Opt] -> Either Text BotOptions
-mkBotOptions mod opts = do
-  proxy  <- maybe (Right Nothing) (fmap Just <$> toProxy) (lookupMod mod "proxy" opts)
-  loglvl <- opt "logLevel" Warning
-  delay  <- opt "delay" 3000000
-  return BotOptions
-    { logLevel        = loglvl
-    , updateDelay     = delay
-    , managerSettings = HTTP.managerSetProxy (HTTP.proxyEnvironment proxy) HTTP.tlsManagerSettings
-    }
- where
-  opt k def =
-    maybe (Left $ "Bad parameter " <> pack k) Right $ maybe (Just def) readT (lookupMod mod k opts)
-
-toProxy :: Text -> Either Text HTTP.Proxy
-toProxy = parseEither "proxy" $ do
-  spaces
-  host <- many1 $ alphaNum <|> oneOf "_."
-  _    <- char ':'
-  port <- int
-  spaces
-  eof
-  return $ HTTP.Proxy { HTTP.proxyHost = B.pack host, HTTP.proxyPort = port }
 
 runBot
   :: (Show k, Eq k, Hashable k)

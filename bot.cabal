@@ -26,10 +26,13 @@ source-repository head
 library
   exposed-modules:
       Bot
-      BotAPI
-      BotIO
+      Bot.API
+      Bot.IO
+      Bot.Options
       Deserialization
       EchoBot
+      EchoBot.Options
+      EchoBot.State
       Logger
       Misc
       Options

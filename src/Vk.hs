@@ -7,7 +7,7 @@ module Vk
     ( newAPI
     ) where
 
-import           BotAPI                         ( BotAPI(..)
+import           Bot.API                        ( BotAPI(..)
                                                 , Button
                                                 )
 import           Control.Arrow                  ( left )

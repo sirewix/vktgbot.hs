@@ -10,7 +10,7 @@ module Telegram
   )
 where
 
-import           BotAPI                         ( BotAPI(..)
+import           Bot.API                        ( BotAPI(..)
                                                 , Button
                                                 )
 import           Control.Arrow                  ( left )
@@ -52,7 +52,7 @@ import qualified Telegram.Chat                 as Chat
 import qualified Telegram.Message              as Message
 import qualified Telegram.Update               as Update
 import qualified Telegram.User                 as User
-import qualified BotAPI
+import qualified Bot.API
 
 newAPI :: Text -> Logger -> HTTP.Manager -> ExceptT Text IO (BotAPI (Int, Int))
 newAPI token log mgr = liftIO $ do
@@ -97,7 +97,7 @@ getMessages tgpre upd_offset file = do
   return msgs
 
 -- update to Message, skip if has no text
-uniqueMsg :: Update.Json -> Maybe ((Int, Int), BotAPI.Message)
+uniqueMsg :: Update.Json -> Maybe ((Int, Int), Bot.API.Message)
 uniqueMsg upd = do
   msg  <- Update._message upd
   txt  <- Message._text msg

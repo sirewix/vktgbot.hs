@@ -1,5 +1,5 @@
 -- this module contains everything to write bot logic
-module BotIO where
+module Bot.IO where
 import           Control.Monad.Free             ( Free(..) )
 import           Data.Text                      ( Text )
 

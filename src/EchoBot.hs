@@ -1,16 +1,14 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
+--{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module EchoBot
   ( EchoBotState(..)
   , EchoBotOptions(..)
-  , defState
   , echoBot
-  , mkEchoBotOptions
   )
 where
 
-import           BotIO                          ( BotIO
+import           Bot.IO                         ( BotIO
                                                 , modifyState
                                                 , readMessage
                                                 , readState
@@ -18,60 +16,46 @@ import           BotIO                          ( BotIO
                                                 , sendWithKeyboard
                                                 )
 import           Control.Applicative            ( (<**>) )
-import           Data.Char                      ( isAlphaNum )
-import           Data.Maybe                     ( fromMaybe )
 import           Data.Text                      ( Text
                                                 , pack
                                                 , unpack
                                                 )
-import           Misc                           ( parseEither
-                                                , int
-                                                )
-import           Options                        ( Opt )
+import           EchoBot.Options                ( EchoBotOptions(..) )
+import           EchoBot.State                  ( EchoBotState(..) )
 import           Text.Read                      ( readMaybe )
 
-newtype EchoBotState = EchoBotState
-    { nrepeat :: Int }
-    deriving (Eq, Show)
-
-newtype EchoBotOptions = EchoBotOptions
-    { helpText :: Text }
-
-mkEchoBotOptions :: [Opt] -> Either Text EchoBotOptions
-mkEchoBotOptions opts = pure
-  $ EchoBotOptions { helpText = fromMaybe helptxt $ lookup "helpText" opts }
- where
-  helptxt =
-    "Hi, this is simple echo bot" <> "/help — this message" <> "/repeat — set repeat"
-
-defState :: [Opt] -> Either Text EchoBotState
-defState opts = EchoBotState <$> opt "repeatTimes" 5
- where
-  opt k def =
-    maybe (Right def) (parseEither ("parameter " <> pack k) int) (lookup k opts)
+import           Text.Parsec                    ( char
+                                                , alphaNum
+                                                , eof
+                                                , many
+                                                , many1
+                                                , parse
+                                                , skipMany
+                                                )
+import           Text.Parsec.Char               ( anyChar )
 
 echoBot :: EchoBotOptions -> BotIO EchoBotState ()
 echoBot opts = do
   input <- readMessage
-  case matchCmd (unpack input) of
+  case matchCmd input of
     Just (cmd, args) -> case command opts cmd of
       Just cmd -> cmd args
-      Nothing  -> sendMessage ("Unrecognized command \"/" <> pack cmd <> "\", try /help")
+      Nothing  -> sendMessage ("Unrecognized command \"/" <> cmd <> "\", try /help")
     Nothing -> do
       state <- readState
       mapM_ (const $ sendMessage input) [1 .. (nrepeat state)]
 
-command :: EchoBotOptions -> String -> Maybe (String -> BotIO EchoBotState ())
+command :: EchoBotOptions -> Text -> Maybe (Text -> BotIO EchoBotState ())
 command opts cmd = pure opts <**> case cmd of
   "start"  -> Just help
   "help"   -> Just help
   "repeat" -> Just repeatCmd
   _        -> Nothing
 
-help :: EchoBotOptions -> String -> BotIO s ()
+help :: EchoBotOptions -> Text -> BotIO s ()
 help opts _ = sendMessage (helpText opts)
 
-repeatCmd :: EchoBotOptions -> String -> BotIO EchoBotState ()
+repeatCmd :: EchoBotOptions -> Text -> BotIO EchoBotState ()
 repeatCmd _ _ = do
   state <- readState
   sendWithKeyboard
@@ -87,10 +71,13 @@ repeatCmd _ _ = do
         ("The number of repetitions of a message has been set to " <> pack (show n))
     Nothing -> sendMessage ("\"" <> msg <> "\" is not a number")
 
-
-matchCmd :: String -> Maybe (String, String)
-matchCmd (first : msg)
-  | (first == '/') && not (null cmd) = Just (cmd, dropWhile (== ' ') rest)
-  | otherwise                          = Nothing
-  where (cmd, rest) = span isAlphaNum msg
-matchCmd [] = Nothing
+matchCmd :: Text -> Maybe (Text, Text)
+matchCmd = either (const Nothing) Just . parse parser ""
+ where
+  parser = do
+    _ <- char '/'
+    cmd <- many1 alphaNum
+    skipMany (char ' ')
+    arg <- many anyChar
+    eof
+    return (pack cmd, pack arg)

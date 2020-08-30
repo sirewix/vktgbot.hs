@@ -5,19 +5,17 @@ module Main
   )
 where
 
-import           Bot                            ( mkBotOptions
-                                                , runBot
-                                                )
+import           Bot                            ( runBot )
+import           Bot.Options                    ( mkBotOptions )
 import           Control.Concurrent.Async       ( concurrently )
 import           Control.Concurrent.MVar        ( newMVar )
 import           Control.Monad.Except           ( liftIO
                                                 , liftEither
                                                 )
 import           Data.Text                      ( pack )
-import           EchoBot                        ( mkEchoBotOptions
-                                                , echoBot
-                                                , defState
-                                                )
+import           EchoBot                        ( echoBot )
+import           EchoBot.Options                ( mkEchoBotOptions )
+import           EchoBot.State                  ( defaultState )
 import           Logger                         ( Priority(..)
                                                 , newLogger
                                                 )
@@ -44,7 +42,7 @@ main = do
       tgopts    <- liftEither $ mkBotOptions "tg" options
       vkopts    <- liftEither $ mkBotOptions "vk" options
       echoopts  <- liftEither $ mkEchoBotOptions options
-      defState' <- liftEither $ defState options
+      defState' <- liftEither $ defaultState options
       let program = echoBot echoopts
       liftIO . log Debug . pack . show $ options
 

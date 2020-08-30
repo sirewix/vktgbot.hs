@@ -1,12 +1,12 @@
 -- this module contains everything to write API bindings
-module BotAPI
+module Bot.API
   ( BotAPI(..)
   , Button
   , Message
   )
 where
 
-import           BotIO                          ( Message
+import           Bot.IO                         ( Message
                                                 , Button
                                                 )
 import           Control.Monad.Except           ( ExceptT )
