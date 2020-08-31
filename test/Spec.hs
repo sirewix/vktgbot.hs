@@ -4,11 +4,11 @@
   , TupleSections
   #-}
 
-import           Bot                            ( BotIO
+import           Bot                            ( groupMsgs )
+import           Bot.IO                         ( BotIO
                                                 , BotUserInteraction(..)
                                                 , Button
                                                 , Message
-                                                , groupMsgs
                                                 )
 import           Control.Arrow                  ( second )
 import           Control.Monad.Free             ( Free(..) )
@@ -19,10 +19,11 @@ import           Data.Text                      ( Text
                                                 )
 import           EchoBot                        ( EchoBotState(..)
                                                 , echoBot
+                                                )
+import           EchoBot.Options                ( EchoBotOptions
                                                 , mkEchoBotOptions
                                                 )
 import           Misc                           ( (=:) )
-import           Result                         ( resToIO )
 import           Test.QuickCheck                ( Arbitrary(..)
                                                 , arbitraryUnicodeChar
                                                 , listOf
@@ -43,24 +44,28 @@ instance Arbitrary NonEmptyAnyText where
 
 main :: IO ()
 main = do
-    putStr "Testing message grouping function\n"
+    putStrLn "\nTesting message grouping function"
     quickCheck testGroupMsgs
-    opts <- resToIO $ mkEchoBotOptions [ "helpText" =: "help!" ]
+    let echoopts = mkEchoBotOptions [ "helpText" =: "help!" ]
+    testEchoBot echoopts
 
-    putStr "Testing echoing functionality for every number and message\n"
+testEchoBot :: EchoBotOptions -> IO ()
+testEchoBot opts = do
+    putStrLn "Testing echo bot logic"
+    putStrLn "Testing echoing functionality for every number and message"
     quickCheck $ \(n, NonEmptyAnyText str) -> testInterpret
                             (echoBot opts)
                             (EchoBotState { nrepeat = n }) [str]
                        == (EchoBotState { nrepeat = n }, map (const (str, Nothing)) [1..n])
 
 
-    putStr "Testing /help command\n"
+    putStrLn "Testing /help command"
     quickCheck $ \(n, AnyText str) -> testInterpret
                             (echoBot opts)
                             (EchoBotState { nrepeat = n }) ["/help " <> str]
                        == (EchoBotState { nrepeat = n }, [("help!", Nothing)])
 
-    putStr "Testing /repeat commmand for every initial and subsequent numbers\n"
+    putStrLn "Testing /repeat commmand for every initial and subsequent numbers"
     quickCheck $ \(n, m, NonEmptyAnyText str) ->
         let (state, outs) = testInterpret
                                     (echoBot opts)

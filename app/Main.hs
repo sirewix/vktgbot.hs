@@ -41,9 +41,8 @@ main = do
     liftIO . loggedExceptT log $ do
       tgopts    <- liftEither $ mkBotOptions "tg" options
       vkopts    <- liftEither $ mkBotOptions "vk" options
-      echoopts  <- liftEither $ mkEchoBotOptions options
       defState' <- liftEither $ defaultState options
-      let program = echoBot echoopts
+      let program = echoBot (mkEchoBotOptions options)
       liftIO . log Debug . pack . show $ options
 
       let tg = case lookup "tg.token" options of
