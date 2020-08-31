@@ -103,6 +103,9 @@ test-suite bot-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Test.Common
+      Test.EchoBot
+      Test.Interpreter
       Paths_bot
   hs-source-dirs:
       test

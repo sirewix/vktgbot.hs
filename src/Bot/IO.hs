@@ -3,16 +3,16 @@ module Bot.IO where
 import           Control.Monad.Free             ( Free(..) )
 import           Data.Text                      ( Text )
 
-data BotState a = BotState
-    { content :: a
-    , action :: BotIO a ()
+data BotState s a = BotState
+    { content :: s
+    , action :: BotIO s a
     }
 
-data BotUserInteraction a next =
+data BotUserInteraction s next =
     ReadMessage (Message -> next)
   | SendMessage Text (Maybe [Button]) next
-  | ModifyState (a -> a) next
-  | ReadState (a -> next)
+  | ModifyState (s -> s) next
+  | ReadState (s -> next)
 
 instance Functor (BotUserInteraction a) where
   fmap f (ReadMessage g            ) = ReadMessage (f . g)

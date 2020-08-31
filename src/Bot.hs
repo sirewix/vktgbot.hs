@@ -56,10 +56,10 @@ interpret
   :: BotAPI k
   -> Logger
   -> k
-  -> BotIO a ()
-  -> BotState a
+  -> BotIO s a
+  -> BotState s a
   -> Maybe Message
-  -> ExceptT Text IO (BotState a)
+  -> ExceptT Text IO (Maybe a, BotState s a)
 interpret bot log sesid program = interpret'
  where
   interpret' state msg = case action state of
@@ -68,7 +68,7 @@ interpret bot log sesid program = interpret'
         Just msg -> do
           liftIO $ log Debug "ReadMessage"
           interpret' (state { action = f msg }) Nothing
-        Nothing -> return state
+        Nothing -> return (Nothing, state)
     Free (SendMessage m btns n) -> do
       liftIO $ log Debug "SendMessage"
       apiSendMessage bot sesid m btns
@@ -83,9 +83,9 @@ interpret bot log sesid program = interpret'
       liftIO $ log Debug "ReadState"
       let s = state { action = f (content state) }
       interpret' s msg
-    Pure _ -> do
+    Pure a -> do
       liftIO $ log Debug "Pure"
-      return $ state { action = program }
+      return (Just a, state { action = program })
 
 groupMsgs :: (Eq sesid) => [(sesid, msg)] -> [(sesid, [msg])]
 groupMsgs ((sesid, msg) : rest) = (sesid, msg : map snd this) : groupMsgs notthis
@@ -125,7 +125,7 @@ processMessages
   :: (Eq k, Hashable k)
   => Logger
   -> BotAPI k
-  -> UserData k (BotState s)
+  -> UserData k (BotState s ())
   -> BotIO s ()
   -> s
   -> (k, [Message])
@@ -134,7 +134,7 @@ processMessages log bot db program defState (someid, msgs) = loggedExceptT log $
   updateUserData defBotState db someid $ \state -> foldM
     (\state msg -> do
       liftIO $ log Debug ("processing message \"" <> msg <> "\"")
-      interpret bot log someid program state (Just msg)
+      snd <$> interpret bot log someid program state (Just msg)
     )
     state
     msgs
