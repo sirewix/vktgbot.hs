@@ -25,30 +25,27 @@ import           Data.Text                      ( Text
                                                 , pack
                                                 , unpack
                                                 )
-import           Misc                           ( parseEither )
+import           Misc                           ( parseEither
+                                                , quotedString
+                                                )
 import           System.Environment             ( getArgs
                                                 , getEnvironment
                                                 )
 import           Text.Parsec                    ( (<|>)
                                                 , alphaNum
                                                 , anyChar
-                                                , between
                                                 , char
                                                 , char
                                                 , endOfLine
                                                 , eof
                                                 , lookAhead
-                                                , many
                                                 , many1
                                                 , manyTill
-                                                , noneOf
                                                 , oneOf
                                                 , sepBy
                                                 , skipMany
-                                                , string
                                                 , try
                                                 )
-import           Text.Parsec.Text               ( Parser )
 import qualified Control.Applicative           as A
 import qualified Control.Exception             as E
 import qualified Data.Text.IO                  as TIO
@@ -67,24 +64,22 @@ getOptions = do
 
 fromConfig :: FilePath -> ExceptT Text IO [Opt]
 fromConfig filename = do
-    cs <- ExceptT $ left (pack . show) <$> (E.try (TIO.readFile filename) :: IO (Either E.IOException Text))
-    liftEither $ parseEither "config" config cs
+  cs <-
+    ExceptT
+    $   left (pack . show)
+    <$> (E.try (TIO.readFile filename) :: IO (Either E.IOException Text))
+  liftEither (parseConfig cs)
+
+parseConfig :: Text -> Either Text [Opt]
+parseConfig = parseEither "config" $ do
+  res <- flip sepBy endOfLine $ comment <|> keyValuePair <|> (spaces >> return Nothing)
+  eof
+  return (catMaybes res)
  where
   eol  = void endOfLine
   eolf = eol <|> eof
   til x = anyChar `manyTill` (try . lookAhead $ x)
-  sstring = do
-    x <- til eolf
-    return (unwords . words $ x) -- eeh
-
-  qstring = between (string "\"\n" <|> string "\"") (string "\n\"" <|> string "\"") (many qchar)
-  qchar   = noneOf ['\\', '"'] <|> do
-    _ <- char '\\'
-    c <- oneOf ['\\', '"', 'n']
-    return $ case c of
-      'n' -> '\n'
-      x   -> x
-
+  simpleString = (unwords . words) <$> til eolf
   spaces  = skipMany $ oneOf spchr
   spchr   = [' ', '\t']
   comment = do
@@ -93,21 +88,16 @@ fromConfig filename = do
     _ <- til eolf
     return Nothing
 
-  definition = do
+  keyValuePair = do
     spaces
     key <- many1 $ alphaNum <|> oneOf ['_', '.']
     spaces
     _ <- char '='
     spaces
-    val <- qstring <|> sstring
+    val <- quotedString <|> simpleString
     spaces
     return $ Just (key, pack val)
 
-  config :: Parser [Opt]
-  config = do
-    res <- flip sepBy endOfLine $ comment <|> definition <|> (spaces >> return Nothing)
-    eof
-    return (catMaybes res)
 
 parseArgs :: [String] -> Either Text [Opt]
 parseArgs = sequence . f

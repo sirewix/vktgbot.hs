@@ -8,6 +8,7 @@ module Misc
   , loggedExceptT
   , parseEither
   , readT
+  , quotedString
   )
 where
 
@@ -23,9 +24,16 @@ import           Data.Text                      ( Text
 import           Logger                         ( Logger
                                                 , Priority(..)
                                                 )
-import           Text.Parsec                    ( many1
+import           Text.Parsec                    ( (<|>)
+                                                , between
+                                                , char
                                                 , digit
+                                                , many
+                                                , many1
+                                                , noneOf
+                                                , oneOf
                                                 , parse
+                                                , string
                                                 )
 import           Text.Parsec.Error              ( ParseError
                                                 , showErrorMessages
@@ -33,9 +41,6 @@ import           Text.Parsec.Error              ( ParseError
                                                 )
 import           Text.Parsec.Text               ( Parser )
 import           Text.Read                      ( readMaybe )
-
-int :: Parser Int
-int = read <$> many1 digit
 
 -- custom error printer to avoid printing line number,
 -- constant strings were copied from parsec source code
@@ -61,3 +66,19 @@ loggedExceptT log = either (log Error) pure <=< runExceptT
 
 readT :: Read a => Text -> Maybe a
 readT = readMaybe . unpack
+
+quotedString :: Parser String
+quotedString = between (string "\"" <|> string "\"\n")
+                       (string "\"" <|> string "\n\"")
+                       (many qchar)
+ where
+  qchar = noneOf ['\\', '"'] <|> do
+    _ <- char '\\'
+    c <- oneOf ['\\', '"', 'n']
+    return $ case c of
+      'n' -> '\n'
+      x   -> x
+
+int :: Parser Int
+int = read <$> many1 digit
+
